@@ -1,0 +1,73 @@
+{
+  "dataset_root_env": "GEMMA4_DATASET_ROOT",
+  "files": {
+    "HARNESS_README.md": {
+      "bytes": 49356,
+      "sha256": "3d6e57a13234cb4e783ba24eaab486459af76e0923ea4c6607cd41cc8961bbbb"
+    },
+    "docker/Dockerfile.public": {
+      "bytes": 988,
+      "sha256": "c92dfd9cd9ce019c4910a5334d6ecac606b612ec736a933b4af36da9c6fdf06c"
+    },
+    "docker/Dockerfile.sandbox": {
+      "bytes": 773,
+      "sha256": "2fef37c9275522eea4dc3371c60b54d9ba3cfa7871f89f1749aa92f34beff70a"
+    },
+    "docker/imp.py": {
+      "bytes": 834,
+      "sha256": "9fdd84ba6d52327a3f1a291b90b4babfa1393a693a8f14f589a5ee81ed59afdf"
+    },
+    "docker/telnetlib.py": {
+      "bytes": 23336,
+      "sha256": "579731aca27a0ddd7b39a8c63f97941b3329ce892142cbd7748c6a09904daedb"
+    },
+    "sample_submission/adapters/main_lora/adapter_config.json": {
+      "bytes": 664,
+      "sha256": "75a46da2db7f3c70442e5c728f64059aff52cf64174cee7aeb3a4ec37f6e78fb"
+    },
+    "sample_submission/adapters/main_lora/adapter_model.safetensors": {
+      "bytes": 217672,
+      "sha256": "dcbedd989af34f5201a39606e0bd4014d351a29162dd96da418782cbbe487ad9"
+    },
+    "sample_submission/adapters/tool_lora/adapter_config.json": {
+      "bytes": 664,
+      "sha256": "75a46da2db7f3c70442e5c728f64059aff52cf64174cee7aeb3a4ec37f6e78fb"
+    },
+    "sample_submission/adapters/tool_lora/adapter_model.safetensors": {
+      "bytes": 217672,
+      "sha256": "dcbedd989af34f5201a39606e0bd4014d351a29162dd96da418782cbbe487ad9"
+    },
+    "sample_submission/agent.yaml": {
+      "bytes": 438,
+      "sha256": "c7fbbbbdc44778419be8e9f53a85800eeb17d0cf151e0846c46e107401b72034"
+    },
+    "sample_submission/configs/sampling.yaml": {
+      "bytes": 120,
+      "sha256": "3dab0b2506dae34ce92fef7b380d6073729104b23fe2cf66d44ac1d2f213aa6a"
+    },
+    "sample_submission/eval_config.yaml": {
+      "bytes": 232,
+      "sha256": "adb486b67535fa59b427b79d44dafc131176f1f1964d184e16046ed520ede02d"
+    },
+    "sample_submission/prompts/analyzer.md": {
+      "bytes": 527,
+      "sha256": "c762b062032cc8463015e589ad8b4f0e17296062e1b0ff1e78712eef9f5e2d43"
+    },
+    "sample_submission/prompts/system.md": {
+      "bytes": 3888,
+      "sha256": "f1cbf7943ee9687382321b1dfd9cd88581d608c1c8b8e6ea61a763bd1a3234af"
+    },
+    "sample_submission/sub_agents/code_analyzer.yaml": {
+      "bytes": 361,
+      "sha256": "7a764798e36cc68aa38900256245e4aed969b5439b992c7da4105b6ebcb7e62b"
+    },
+    "sandbox/setup.py": {
+      "bytes": 13883,
+      "sha256": "0263995ade90f83c8efa0ab5c7c9b7629696f39bc75274d58fc27ab774568409"
+    },
+    "tasks.jsonl": {
+      "bytes": 1984455,
+      "sha256": "e4b3fd60f69dbc2b9213e54eeb9636db78aefe92c1d06269d73d9f5f8f3c8ad6"
+    }
+  }
+}

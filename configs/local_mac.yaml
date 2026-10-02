@@ -1,0 +1,22 @@
+# Local Mac runtime profile. Read by humans and future scripts; no secrets, no absolute paths in code.
+profile: local_mac
+hardware:
+  machine: MacBook Pro M1 Pro
+  ram_gb: 16
+  arch: arm64
+  gpu: none            # Gemma 4 31B is NOT run here
+dataset:
+  root_env: GEMMA4_DATASET_ROOT
+  default_local_value: "/Users/izbassar/Documents/Projects/gemma competition/gemma-4-developer-agent"
+  read_only: true
+harness:
+  root_env: GEMMA4_HARNESS_ROOT   # future: captured swegemma/adk-* distributions (not yet available, see H23)
+  available: false
+sandbox:
+  preferred: docker     # sandbox wheels are manylinux x86_64 for compiled deps -> needs --platform linux/amd64 (L09)
+  subprocess_fidelity: low
+model:
+  allowed: none         # scripted mock server only for local harness certification
+outputs:
+  local_runs: artifacts/local_runs
+  cert_results: harness_cert/results

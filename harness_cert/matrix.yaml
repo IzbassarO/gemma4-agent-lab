@@ -1,0 +1,523 @@
+# Harness certification matrix (STEP 0).
+#
+# status vocabulary (only these): PASS | FAIL | VERSION-SPECIFIC | HOST-UNKNOWN | NOT-REPRODUCED | DEFERRED
+# Nothing here has been runtime-tested yet. Initial statuses are deliberately NOT PASS.
+#
+# Field semantics:
+#   local_possible   - can run on the M1 Mac (no GPU) once the harness packages are available locally.
+#   requires_model   - needs the real Gemma 4 31B (or a real Gemma chat template/parser), not a scripted mock.
+#   blocked_by       - what currently prevents running it. `harness_source` = swegemma / adk-submission /
+#                      adk-eval-core / google-adk / litellm are NOT in $GEMMA4_DATASET_ROOT/wheels (see H23).
+#   result_path      - raw output dir (gitignored, never committable); curated summaries go to harness_cert/reports/.
+#   "scripted mock"  - a local OpenAI-compatible stub server that returns predetermined tool calls and records
+#                      every request body. It exercises ADK -> LiteLLM -> tool -> serialization without a model.
+#
+# authority labels: source hierarchy (OFFICIAL-RULE, OFFICIAL-HARNESS, OFFICIAL-NOTEBOOK, REPRODUCED-LOCAL,
+#                   OWN-KAGGLE-RUN, COMMUNITY-EVIDENCE, INFERENCE). Evidence classes for audit conclusions are in
+#                   docs/competition/STATIC_HARNESS_AUDIT.md.
+
+schema_version: 1
+status_vocabulary: [PASS, FAIL, VERSION-SPECIFIC, HOST-UNKNOWN, NOT-REPRODUCED, DEFERRED]
+
+items:
+  - id: H01
+    title: reasoning_content continuity across tool calls
+    hypothesis: Prior-turn reasoning sent by ADK/LiteLLM as `reasoning_content` is dropped by the pinned vLLM, which reads only `reasoning`.
+    authority:
+      - "COMMUNITY-EVIDENCE (forum C02)"
+      - "INFERENCE (upstream vLLM #38488 / PR #42664 merged 2026-05-21; Kaggle pin unknown)"
+    local_possible: false
+    requires_model: true
+    requires_gpu: true
+    requires_docker: false
+    blocked_by: [harness_source, gpu, vllm_version_unknown]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H01/
+    minimal_repro: >-
+      Partial local step (scripted mock): capture the 2nd request body after a tool call and record which key
+      (reasoning_content / reasoning / none) carries the prior thought. Full step (GPU, exact vLLM): plant a sentinel
+      in thought, then check the tokenized prompt of the next request for the sentinel.
+    notes: Request-side half is mock-testable once harness_source is available; consumption side needs the exact vLLM build.
+
+  - id: H02
+    title: include_thoughts semantics
+    hypothesis: include_thoughts:false maps to chat_template_kwargs enable_thinking:false (no reasoning generated) rather than hiding retained thoughts.
+    authority:
+      - "OFFICIAL-HARNESS (README: \"use 0 or include_thoughts:false to disable thinking\")"
+      - "COMMUNITY-EVIDENCE (C01, adk_submission 0.2.12)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H02/
+    minimal_repro: >-
+      Compile two copies of a 1-agent bundle (include_thoughts true/false) against the scripted mock and diff the
+      outgoing request bodies (extra_body / chat_template_kwargs / reasoning_effort). Generation-side effect needs GPU.
+    notes: README itself already says include_thoughts:false disables thinking; the "private reasoning" claim in older notebooks contradicts the README.
+
+  - id: H03
+    title: thinking_budget forwarding
+    hypothesis: thinking_budget reaches the server in some field vLLM honors; otherwise it is silently dropped (litellm.drop_params=True).
+    authority:
+      - "OFFICIAL-HARNESS (README section 2.4)"
+      - "INFERENCE"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: medium
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H03/
+    minimal_repro: Scripted mock; compile bundles with thinking_budget 0 / 512 / 4096 and diff request bodies. Effect on generation length needs GPU.
+    notes: drop_params=True means unsupported params vanish without error; absence in the request body is the failure signal.
+
+  - id: H04
+    title: undeclared tool fatal behavior
+    hypothesis: A model call to a tool not declared on the calling agent raises ValueError in ADK _get_tool and ends the task.
+    authority:
+      - "COMMUNITY-EVIDENCE (C03)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: critical
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H04/
+    minimal_repro: Agent declares only run_command+submit_patch; scripted mock emits search_similar_code(...). Record exception class, whether the loop continues, and the final agent_patch.
+    notes: Pair with H13/H14 - does fallback patch extraction still run on this exception path (C04)?
+
+  - id: H05
+    title: declared tool control
+    hypothesis: 'The same call with the tool declared executes and returns {"status":"ok",...}.'
+    authority:
+      - "OFFICIAL-HARNESS (README section 6)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: low
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H05/
+    minimal_repro: Same as H04 with the tool declared.
+    notes: Control for H04/H18.
+
+  - id: H06
+    title: read_file line-range serialization
+    hypothesis: start_line/end_line arrive as strings through the tool-call path and trigger "'>' not supported between 'int' and 'str'".
+    authority:
+      - "COMMUNITY-EVIDENCE (C07)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H06/
+    minimal_repro: 'Scripted mock emits read_file with {"start_line": 2, "end_line": 5} and with {"start_line": "2", "end_line": "5"}; record tool result.'
+    notes: Real Gemma parser (tool_call_parser=gemma4) may emit strings even if the mock emits ints; final confirmation needs GPU.
+
+  - id: H07
+    title: read_file quotes/backslashes/unicode fidelity
+    hypothesis: File content containing quotes, backslashes, newlines and non-ASCII reaches the model with extra escaping layers.
+    authority:
+      - "COMMUNITY-EVIDENCE (C05)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H07/
+    minimal_repro: Fixture file with '"', "\\", '\n' literal, triple quotes, Arabic/emoji; mock calls read_file; inspect the tool message content in the NEXT request body byte-for-byte.
+    notes: Measure what the model sees, not the Python return value.
+
+  - id: H08
+    title: edit_file simple replacement
+    hypothesis: A plain ASCII single-line exact replacement succeeds with strategy=exact.
+    authority:
+      - "OFFICIAL-HARNESS (README section 6.2)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: medium
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H08/
+    minimal_repro: Mock emits edit_file(old_string='return a + b', new_string='return a - b') on a fixture; check file bytes and result JSON.
+    notes: Baseline for H09/H10.
+
+  - id: H09
+    title: edit_file triple-quote / docstring replacement
+    hypothesis: old_string containing triple quotes and backslashes fails to match after serialization round-trips.
+    authority:
+      - "COMMUNITY-EVIDENCE (C05/C06)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H09/
+    minimal_repro: 'Mock copies old_string from the model-visible read_file output of H07 (not from disk) and calls edit_file; record match/no-match and strategy.'
+    notes: The interesting failure is "model copies what it saw and it does not match disk".
+
+  - id: H10
+    title: edit_file unicode replacement
+    hypothesis: Non-ASCII old_string/new_string round-trip correctly.
+    authority:
+      - "COMMUNITY-EVIDENCE (C05)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: medium
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H10/
+    minimal_repro: Same as H09 with Arabic / CJK / emoji / combining characters; check final file bytes (UTF-8, no \uXXXX literals).
+    notes: ensure_ascii JSON layers are the suspected cause.
+
+  - id: H11
+    title: protected test/config reset in Container B
+    hypothesis: git checkout HEAD -- <paths> aborts entirely when any pathspec does not exist, so tracked test edits may survive the reset.
+    authority:
+      - "OFFICIAL-HARNESS (README section 8.2 documents the reset and the `2>/dev/null || true`)"
+      - "COMMUNITY-EVIDENCE (C08)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: medium
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H11/
+    minimal_repro: Call verify_task with a hand-written agent_patch that edits a tracked test file plus a new sitecustomize.py; check whether the test file is restored before test_patch applies.
+    notes: Certification only - our agents never edit tests. Git-only RUNTIME-REPRODUCED (harness_cert/reports/git_semantics.md) - a nonexistent pathspec aborts the whole checkout; which paths the harness passes is HOST-UNKNOWN.
+
+  - id: H12
+    title: scratch file contamination
+    hypothesis: /workspace/repro.py enters agent_patch; /tmp/repro.py does not; excluded patterns (__pycache__, *.egg-info, ...) do not.
+    authority:
+      - "OFFICIAL-HARNESS (README sections 4.2, 8.1, 10.3; sandbox/setup.py setup_git_exclude)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: medium
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H12/
+    minimal_repro: Mock writes /workspace/repro.py, /tmp/repro.py, /workspace/build/x.py, then submit_patch; inspect patch file list.
+    notes: Git-only RUNTIME-REPRODUCED (harness_cert/reports/git_semantics.md) - new repro.py enters the diff, excluded dirs do not. Harness-level behavior NOT-REPRODUCED.
+
+  - id: H13
+    title: timeout patch recovery
+    hypothesis: When max_time expires without submit_patch, fallback extraction preserves the working-tree diff and it is verified.
+    authority:
+      - "OFFICIAL-HARNESS (README section 8.1)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H13/
+    minimal_repro: Mock edits a source file, then sleeps past max_time_minutes; check patches/<id>.patch and Phase 2 runs.
+    notes: Also test the timeout that fires mid-tool-call.
+
+  - id: H14
+    title: tool-budget patch recovery
+    hypothesis: Exhausting max_tool_calls without submit_patch still yields a verified fallback patch.
+    authority:
+      - "OFFICIAL-HARNESS (README section 8.1)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H14/
+    minimal_repro: max_tool_calls=3; mock edits on call 1 then spends calls 2-4; check patch preserved.
+    notes: Record what the budget-exceeded tool response looks like to the model.
+
+  - id: H15
+    title: compaction state retention
+    hypothesis: After EventsCompaction triggers, the agent still has the last critical tool result.
+    authority:
+      - "OFFICIAL-HARNESS (README 7.2: interval 5, overlap 2, threshold 14336, retention 5)"
+      - "OFFICIAL-NOTEBOOK (interval 15)"
+      - "COMMUNITY-EVIDENCE (C09)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H15/
+    minimal_repro: Mock drives a long tool chain past token_threshold; record request bodies before/after compaction.
+    notes: Compaction summarization itself calls the LLM; the mock must answer summarization requests too. Compaction config is set in scripts/inference.py (scorer), not by the submission.
+
+  - id: H16
+    title: LoRA model-start smoke
+    hypothesis: vLLM starts with discovered adapters on scorer-like hardware.
+    authority:
+      - "OFFICIAL-HARNESS (README 3.4)"
+      - "COMMUNITY-EVIDENCE (C11/C12)"
+    local_possible: false
+    requires_model: true
+    requires_gpu: true
+    requires_docker: false
+    blocked_by: [deferred_lora]
+    risk: medium
+    status: DEFERRED
+    result_path: harness_cert/results/H16/
+    minimal_repro: Deferred - LoRA work is out of scope for Step 0.
+    notes: Official sample ships two identical rank-4 adapters (layers_to_transform [0], q_proj/o_proj).
+
+  - id: H17
+    title: double-JSON encoding level
+    hypothesis: 'Tool results are JSON strings wrapped as {"result": "<json>"} and serialized again, giving the model 2+ escaping layers.'
+    authority:
+      - "COMMUNITY-EVIDENCE (C05)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: critical
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H17/
+    minimal_repro: Scripted mock; after one read_file, count escape layers in messages[-1].content of the next request body.
+    notes: Gemma chat-template rendering of the tool message (inside vLLM) can add/remove a layer; final count needs the real template.
+
+  - id: H18
+    title: hallucinated tool recovery
+    hypothesis: Calling a tool that exists nowhere (e.g. `bash`) is fatal rather than an error message the model can recover from.
+    authority:
+      - "COMMUNITY-EVIDENCE (C03/C04)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: critical
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H18/
+    minimal_repro: Mock emits a call to `bash`; observe whether the session continues and whether a prior edit survives as agent_patch.
+    notes: Distinct from H04 (tool exists in registry but not on this agent).
+
+  - id: H19
+    title: compaction + tool-output retention
+    hypothesis: A sentinel that exists only in a tool output is gone from the model input after compaction.
+    authority:
+      - "COMMUNITY-EVIDENCE (C09)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H19/
+    minimal_repro: Plant SENTINEL in a run_command stdout, force compaction, grep subsequent request bodies.
+    notes: Stronger version of H15.
+
+  - id: H20
+    title: AgentTool skip_summarization plumbing
+    hypothesis: With skip_summarization:true the parent sees the sub-agent's final text as the tool result and none of its intermediate tool outputs.
+    authority:
+      - "OFFICIAL-HARNESS (README 2.3, 10.4)"
+      - "COMMUNITY-EVIDENCE"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: medium
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H20/
+    minimal_repro: Mock plays both agents (route by system instruction); diff parent request bodies with skip_summarization true/false.
+    notes: Also record whether sub-agent tool calls count against the shared tool budget.
+
+  - id: H21
+    title: graph-tool response size / context pressure
+    hypothesis: search_similar_code / get_code_neighbors outputs can be large enough to threaten the 32K window.
+    authority:
+      - "COMMUNITY-EVIDENCE (C10)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: medium
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H21/
+    minimal_repro: Call the bound graph tools directly over all 127 graphs for common symbols with default k; record char/token sizes.
+    notes: Graph/embedding data is local; only the tool implementation is missing.
+
+  - id: H22
+    title: global scheduling / 12h behavior
+    hypothesis: Unknown scorer-level concurrency and what happens to unfinished tasks at the global limit.
+    authority:
+      - "COMMUNITY-EVIDENCE (C15)"
+    local_possible: false
+    requires_model: true
+    requires_gpu: true
+    requires_docker: false
+    blocked_by: [host_answer]
+    risk: high
+    status: HOST-UNKNOWN
+    result_path: harness_cert/results/H22/
+    minimal_repro: Requires a host statement or controlled own-Kaggle-run evidence.
+    notes: Not resolvable locally.
+
+  - id: H23
+    title: scorer package / wheelhouse fingerprint
+    hypothesis: Local wheelhouse identifies the scorer harness stack versions.
+    authority:
+      - "OFFICIAL-HARNESS (dataset wheels/)"
+      - "REPRODUCED-LOCAL (vendor_meta/wheelhouse_manifest.json)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: HOST-UNKNOWN
+    result_path: docs/competition/H23_WHEELHOUSE_FINGERPRINT.md
+    minimal_repro: GEMMA4_DATASET_ROOT=... python -m tools.wheelhouse
+    notes: >-
+      Local wheelhouse fingerprinted (124 wheels, fingerprint acb7649a...). It contains only sandbox test dependencies;
+      swegemma, adk-submission, adk-eval-core, google-adk, litellm, vllm, networkx, numpy, pandas, pyarrow, docker are absent.
+      Harness versions on the scorer host are therefore unknown from local data.
+
+  - id: H24
+    title: LoRA effective-output delta
+    hypothesis: An adapter measurably changes outputs on the current server.
+    authority:
+      - "COMMUNITY-EVIDENCE (C12)"
+    local_possible: false
+    requires_model: true
+    requires_gpu: true
+    requires_docker: false
+    blocked_by: [deferred_lora]
+    risk: medium
+    status: DEFERRED
+    result_path: harness_cert/results/H24/
+    minimal_repro: Deferred.
+    notes: ''
+
+  - id: H25
+    title: LoRA KV-cache / context capacity
+    hypothesis: Enabling LoRA reduces usable KV cache on 4xL4.
+    authority:
+      - "COMMUNITY-EVIDENCE (C11)"
+    local_possible: false
+    requires_model: true
+    requires_gpu: true
+    requires_docker: false
+    blocked_by: [deferred_lora]
+    risk: medium
+    status: DEFERRED
+    result_path: harness_cert/results/H25/
+    minimal_repro: Deferred.
+    notes: ''
+
+  - id: H26
+    title: "`../` in !include"
+    hypothesis: README says `..` components are blocked (PathTraversalError), yet bundles using `!include ../...` compile.
+    authority:
+      - "OFFICIAL-HARNESS (README 2.2 says blocked)"
+      - "OFFICIAL-HARNESS (dataset sample_submission/sub_agents/code_analyzer.yaml uses `!include ../prompts/analyzer.md` and `../configs/sampling.yaml`)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H26/
+    minimal_repro: validate_directory + compile_submission on agents/baseline_v0_official and on variants with `../../x.md`, absolute path, and an escaping symlink.
+    notes: Two official sources contradict each other. Likely resolution - `..` resolved relative to the including file and allowed while staying inside the submission root - is INFERENCE until compiled.
+
+  - id: H27
+    title: no-LoRA empty-adapter configuration
+    hypothesis: A bundle with no adapters/ directory and no `adapter:` keys starts the server and compiles cleanly.
+    authority:
+      - "COMMUNITY-EVIDENCE (C13 Sep 30 scorer failures)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H27/
+    minimal_repro: discover_adapters() and compile on a no-adapter bundle; inspect the generated vLLM argv (no empty --lora-modules).
+    notes: Server-start half needs GPU.
+
+  - id: H28
+    title: current public-sample submission path
+    hypothesis: The official sample packaged deterministically passes the current Kaggle submission path.
+    authority:
+      - "OFFICIAL-NOTEBOOK"
+      - "OWN-KAGGLE-RUN (none yet)"
+    local_possible: false
+    requires_model: true
+    requires_gpu: true
+    requires_docker: false
+    blocked_by: [kaggle_submission]
+    risk: medium
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H28/
+    minimal_repro: Deterministic zip of agents/baseline_v0_official; record ZIP SHA; submit once when a submission slot is justified.
+    notes: Local part (deterministic zip + validate_directory) is blocked only by harness_source.
+
+  - id: H29
+    title: get_status / submit_patch free-call behavior
+    hypothesis: Both remain callable when tool_calls_used == max_tool_calls.
+    authority:
+      - "OFFICIAL-HARNESS (README 6.1, count_tool_call=False)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: medium
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H29/
+    minimal_repro: max_tool_calls=2; mock spends 2 calls then calls get_status and submit_patch.
+    notes: Does the session end at budget exhaustion before the model gets another turn? That decides whether "free" is reachable.
+
+  - id: H30
+    title: graph-tool advertisement vs declared tools
+    hypothesis: The task prompt advertises graph tools whenever graph/embedding files exist, independent of the agent's declared tools.
+    authority:
+      - "OFFICIAL-HARNESS (README 5.2 item 6: conditional on data files, not on agent tools)"
+    local_possible: true
+    requires_model: false
+    requires_gpu: false
+    requires_docker: false
+    blocked_by: [harness_source]
+    risk: high
+    status: NOT-REPRODUCED
+    result_path: harness_cert/results/H30/
+    minimal_repro: Bundle without graph tools; capture the first request body; check for "## Code Intelligence Tools" in the user message and the tools[] schema list.
+    notes: >-
+      Locally, all 127 graphs and 127 embeddings are >100 bytes (min 591 KB / 886 KB) and every task maps to both,
+      so if the README is accurate the advertisement appears on every public task. Combined with H04 this is the
+      tool-minimization hazard.

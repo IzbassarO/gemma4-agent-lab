@@ -1,0 +1,88 @@
+# ---- External competition data: NEVER in this repo (accessed via $GEMMA4_DATASET_ROOT) ----
+gemma-4-developer-agent/
+snapshots/
+graphs/
+embeddings/
+wheels/
+wheelhouse/
+tasks.jsonl
+*.tgz
+*.tar
+*.tar.gz
+*.npz
+*.whl
+
+# ---- Model weights / adapters (curate explicitly later, never by accident) ----
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.mlx
+adapters/
+models/
+checkpoints/
+hf_cache/
+# The official sample's two starter LoRA files (rank 4, 217,672 bytes each, identical) exist on disk in
+# agents/baseline_v0_official/ but stay ignored: redistribution terms for competition data are not verified (D003).
+# Restore with `python -m tools.preserve_sample`. If the user approves committing them, uncomment EXACTLY these
+# lines (they allowlist only these four files, nothing else under any adapters/ dir):
+# !agents/baseline_v0_official/adapters/
+# agents/baseline_v0_official/adapters/*
+# !agents/baseline_v0_official/adapters/main_lora/
+# !agents/baseline_v0_official/adapters/tool_lora/
+# agents/baseline_v0_official/adapters/*/*
+# !agents/baseline_v0_official/adapters/main_lora/adapter_config.json
+# !agents/baseline_v0_official/adapters/main_lora/adapter_model.safetensors
+# !agents/baseline_v0_official/adapters/tool_lora/adapter_config.json
+# !agents/baseline_v0_official/adapters/tool_lora/adapter_model.safetensors
+
+# ---- Python / tooling ----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+.ipynb_checkpoints/
+
+# ---- Generated results / traces / artifacts ----
+artifacts/**
+!artifacts/**/
+!artifacts/**/.gitkeep
+# Raw certification output is NEVER committable, whatever its extension (.md included): traces, model
+# conversations, request/response captures, tool outputs, verifier material, anything that may hold gold data.
+# Curated, sanitized summaries go to harness_cert/reports/ instead.
+harness_cert/results/
+/results/
+traces/
+logs/
+*.log
+*.parquet
+submission.zip
+*.zip
+
+# ---- Secrets / env ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+kaggle.json
+.kaggle/
+secrets/
+credentials*.json
+
+# ---- OS / editors ----
+.DS_Store
+.idea/
+.vscode/
+*.swp

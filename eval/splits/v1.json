@@ -1,0 +1,817 @@
+{
+  "algorithm": "group-by-base_commit; per-repo largest-remainder holdout quota; groups ordered by sha256(seed:base_commit); greedy fill, overshooting groups go to dev",
+  "base_commits_crossing_split": [],
+  "counts": {
+    "dev": {
+      "by_repo": {
+        "Textualize/rich": 30,
+        "encode/httpx": 1,
+        "fastapi/fastapi": 41,
+        "psf/requests": 8
+      },
+      "total": 80,
+      "unique_base_commits": 79
+    },
+    "holdout": {
+      "by_repo": {
+        "Textualize/rich": 18,
+        "fastapi/fastapi": 26,
+        "psf/requests": 5
+      },
+      "total": 49,
+      "unique_base_commits": 48
+    }
+  },
+  "holdout_fraction": "49/129",
+  "holdout_quota_by_repo": {
+    "Textualize/rich": 18,
+    "encode/httpx": 0,
+    "fastapi/fastapi": 26,
+    "psf/requests": 5
+  },
+  "input_projection_definition": "sha256 of 'instance_id\\trepo\\tbase_commit\\n' lines sorted by instance_id",
+  "input_projection_sha256": "5a6188365392b2febde6d3067f5fea9e8c5dddcd7389a6e02a87e4333245df30",
+  "inputs_used": [
+    "instance_id",
+    "repo",
+    "base_commit"
+  ],
+  "seed": "gemma4-agent-lab/split/v1",
+  "split_version": "v1",
+  "tasks": [
+    {
+      "base_commit": "a7f2dbe976bf72703376f0cd04487bfc4a849f83",
+      "instance_id": "fastapi_11194",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "811fa898752e7f5697733a2958ff79ad8dfb5276",
+      "instance_id": "fastapi_11355",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "27c0f7e75fc0ce26ca75295d455eb36f0ca033d3",
+      "instance_id": "fastapi_12942",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "5126e099bdda51f261fd5a101b5f914991d31897",
+      "instance_id": "fastapi_13207",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "3b4b5ab8c819dce27fbaf0aa0a9c74b7f3255ec0",
+      "instance_id": "fastapi_13537",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "5c1f87c56387a96dbdddb2b1c4ec9ba48dcebc4e",
+      "instance_id": "fastapi_13713",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "e2354a0a063f2fcb890ec568f1a98e136a39fd25",
+      "instance_id": "fastapi_13786",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "0dd42b746e17d33a74ea267a62eace9ccdccf345",
+      "instance_id": "fastapi_13920",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "16d75d90eb96976a57b94cc24e4018859cd54c4d",
+      "instance_id": "fastapi_14077",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "861b22c40897a03d2d7e5926923d962121ed5e2e",
+      "instance_id": "fastapi_14099",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "6e49dc029541aaa896fa63c47647ccd3f066df67",
+      "instance_id": "fastapi_14186",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "7132a690461c2367f22556eb87c2b5eb7d9cfb45",
+      "instance_id": "fastapi_14246",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "e94028ab60d18080810910352bc9129e8046c92d",
+      "instance_id": "fastapi_14258",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "425a4c5bb1d1a8e00007e82e5188fc4d30585767",
+      "instance_id": "fastapi_14262",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "2cf04ee30db9df2db04a5b1e0d2c625dfbf1a211",
+      "instance_id": "fastapi_14266",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "3c54a8f07b70cdd40e3d81ea319e9fcccd2481d2",
+      "instance_id": "fastapi_14297",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "972a967d5d3fa24d450637c36c6b7ad1f1d8c1b6",
+      "instance_id": "fastapi_14301",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "740ec2787b25e59f7aa9e3df1db09d4489c22718",
+      "instance_id": "fastapi_14303",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "08b09e5236e315b6f10265ed229f130d4befb4ea",
+      "instance_id": "fastapi_14306",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "eaf611f9ee56de4f16c837d4f487a4b9fca507c4",
+      "instance_id": "fastapi_14349",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "6cf40df24d1d199fd25d034fc87fcae284fc23a2",
+      "instance_id": "fastapi_14356",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "eead41bf4cf8587b4d86091dd3eabbb85796e717",
+      "instance_id": "fastapi_14360",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "5265c4f5cb4d8fb4fb5015bccf1a6de8f3fc6044",
+      "instance_id": "fastapi_14361",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "3fe6522aaed4d36d6a38175a4a8137ee0fc62451",
+      "instance_id": "fastapi_14371",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "566e3157a5517784c741dbf36e39687af326fe90",
+      "instance_id": "fastapi_14372",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "63d7a2b9978258d13dfc22664e60fc2110d30e20",
+      "instance_id": "fastapi_14419",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "cff2236dacb7aedcaf2d2de0873cfbc9bb2b897a",
+      "instance_id": "fastapi_14430",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "c57ac7bdf3613798c94caceff562a41fa16d4a2d",
+      "instance_id": "fastapi_14448",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "603df6e36f59cc4a3e189f506b8f36d1e816c3ac",
+      "instance_id": "fastapi_14455",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "516169428d2fa189d34318ebc469a082c49c1189",
+      "instance_id": "fastapi_14458",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "eb1d50479ba0ac873e4ffa08a824b1d822ca3a17",
+      "instance_id": "fastapi_14459",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "f2687dc1bb01f4cb62eee90e656b61c38c2aaf6a",
+      "instance_id": "fastapi_14463",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "2b212ddd7604891d42e2ffbafe764c334230bdb7",
+      "instance_id": "fastapi_14479",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "71a17b5932e38bcf798fcd05c5bb384e6d4db5bf",
+      "instance_id": "fastapi_14482",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "60699f306b67dc1f4918ebea17f04d7a48cda645",
+      "instance_id": "fastapi_14485",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "4a98a66778987648d2195155c9cbe0824d67b02a",
+      "instance_id": "fastapi_14487",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "a456e92a21d5b94a67d6d0fd070218df09444443",
+      "instance_id": "fastapi_14492",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "1fcec88ad2df4541b6a81c4786c4d039dc745e1e",
+      "instance_id": "fastapi_14512",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "6513d4daa16a536d17743de6a292f49bd06388a4",
+      "instance_id": "fastapi_14583",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "6b53786f626db95a42fd0f66afd360bab161f4b1",
+      "instance_id": "fastapi_14605",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "1b3bea8b6be2220cc1544653ea785d2134fcb35b",
+      "instance_id": "fastapi_14609",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "54f8aeeb9a15e4d5a12401ec5549840966df0087",
+      "instance_id": "fastapi_14616",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "eacbce24c9d299c6a28110d9fc8ac50f53cddb08",
+      "instance_id": "fastapi_14786",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "08924400c2c75533685148b029defcf6913f1def",
+      "instance_id": "fastapi_14791",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "464c359bb03f7ba72330198cc9f44df36194837d",
+      "instance_id": "fastapi_14794",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "8e50c55fd90c4433ddc9096ff439da9498a8314a",
+      "instance_id": "fastapi_14851",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "cd31576d5704b6aef1bdadc43770238cd88aad2b",
+      "instance_id": "fastapi_14873",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "d2c17b603d2f986d5f3800d3bf24acba8e1f485b",
+      "instance_id": "fastapi_14953",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "1e78a36b7310003f0ff634627d8a7bc53c6ccdee",
+      "instance_id": "fastapi_14962",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "bc06e4296d588f39f38c7ac2fc96d3913c565962",
+      "instance_id": "fastapi_14964",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "94a1ee749e63591e6e275b726a66e07a25f6c407",
+      "instance_id": "fastapi_14978",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "2f9c914d440e99fe8b62646b51e4d24c5bcd858b",
+      "instance_id": "fastapi_14986",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "c0836dc1b7f4ba91e9563c8c4ccd0ebe655bc914",
+      "instance_id": "fastapi_15023",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "48d58ae3b6ef4ded5a4794618c00345667256d98",
+      "instance_id": "fastapi_15030",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "6ee87478d821171139264cd9cd17cbd2232934ce",
+      "instance_id": "fastapi_15280",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "cb83b83dcf78eab4ea17d504db5abcda705fbdc4",
+      "instance_id": "fastapi_15588",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "22b02e26f9e8c7e32bd8266e2b0ebe8bb3a0db2b",
+      "instance_id": "fastapi_15589",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "ee22a4b8ca46dcce26c8c183afc4992a888d8be2",
+      "instance_id": "fastapi_15661",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "016ab760faba1813ba235d5582a014a58bd2f417",
+      "instance_id": "fastapi_15745",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "9a9c4ad5d06f5fe8ee6775a5aeaa2f83c854f263",
+      "instance_id": "fastapi_15763",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "202b2d2f5f331db9102b5dbcef071a9e09bed10e",
+      "instance_id": "fastapi_15785",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "f1d750fddad90e2faad6c3cc5c85c7687b787e89",
+      "instance_id": "fastapi_15800",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "930b27e5fa32ce150ddcea61f0c913435ae71c83",
+      "instance_id": "fastapi_5077",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "c6487ed632056e450d844846a1b63be551a3cbc6",
+      "instance_id": "fastapi_5624",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "0bdc3ca3732e3742e094bea2b320e9774659ac38",
+      "instance_id": "fastapi_9425",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "4976568fc7cb7501729d8f84d946cde1e91299cd",
+      "instance_id": "fastapi_9555",
+      "repo": "fastapi/fastapi",
+      "split": "dev"
+    },
+    {
+      "base_commit": "aee8e78078e8a7f2736d3cab7a1cb7197356951c",
+      "instance_id": "fastapi_9753",
+      "repo": "fastapi/fastapi",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "4acf5c2c37714cc63b5cf71b3e284fca83c90311",
+      "instance_id": "httpx_3672",
+      "repo": "encode/httpx",
+      "split": "dev"
+    },
+    {
+      "base_commit": "7a13c041dbef42f9f3feb14110f02626f6892e9a",
+      "instance_id": "requests_6589",
+      "repo": "psf/requests",
+      "split": "dev"
+    },
+    {
+      "base_commit": "0b4d494192de489701d3a2e32acef8fb5d3f042e",
+      "instance_id": "requests_6592",
+      "repo": "psf/requests",
+      "split": "dev"
+    },
+    {
+      "base_commit": "7a13c041dbef42f9f3feb14110f02626f6892e9a",
+      "instance_id": "requests_6629",
+      "repo": "psf/requests",
+      "split": "dev"
+    },
+    {
+      "base_commit": "382fc2c0c6c0ef0874bc65bc1175f97c073e5086",
+      "instance_id": "requests_6644",
+      "repo": "psf/requests",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "0e322af87745eff34caffe4df68456ebc20d9068",
+      "instance_id": "requests_6757",
+      "repo": "psf/requests",
+      "split": "dev"
+    },
+    {
+      "base_commit": "1b40fdd004bfc8ba5301bcf8a6908264e9b6b877",
+      "instance_id": "requests_7205",
+      "repo": "psf/requests",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "7407309c8a8a73aa2f4337184025d440bbedab7a",
+      "instance_id": "requests_7309",
+      "repo": "psf/requests",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "6360477c52303c9445b45fa8744b02d05a2f0905",
+      "instance_id": "requests_7315",
+      "repo": "psf/requests",
+      "split": "dev"
+    },
+    {
+      "base_commit": "cbce031327be4f1b4b5fd041ff4dcaa8efa2ce53",
+      "instance_id": "requests_7328",
+      "repo": "psf/requests",
+      "split": "dev"
+    },
+    {
+      "base_commit": "b684dcb9bbf3aa557d1238e72062c4a29737dd1c",
+      "instance_id": "requests_7427",
+      "repo": "psf/requests",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "0b401c76b6e80a4eecf3c690085b2553f6e261ca",
+      "instance_id": "requests_7433",
+      "repo": "psf/requests",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "661970d171d9c3e12e4c789c4768db647d8c4da0",
+      "instance_id": "requests_7502",
+      "repo": "psf/requests",
+      "split": "dev"
+    },
+    {
+      "base_commit": "6f205ff422bccd5e4c4fc0b64c5f3e7df5181db6",
+      "instance_id": "requests_7505",
+      "repo": "psf/requests",
+      "split": "dev"
+    },
+    {
+      "base_commit": "577def22dd83b999c5937cb2bf2ed49600943325",
+      "instance_id": "rich_2725",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "610fd75c433c3dfcd9c296e8b91363979127b9fa",
+      "instance_id": "rich_2943",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "0c8bb032ad3b54a32fdb8a43f5ab457c8cd6dcb1",
+      "instance_id": "rich_3006",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "8a616de8e25db3c93abaaa220c493d80878de69d",
+      "instance_id": "rich_3043",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "7a168a27c5097805b3bafa495f35e3955004ff4a",
+      "instance_id": "rich_3052",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "aca9467ec6a482b3bed1ba7d2e3de72271c5f817",
+      "instance_id": "rich_3061",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "368e8ad77c95a6bef8f9d332039091d1417296bc",
+      "instance_id": "rich_3063",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "01b85ac116c4635b6ddb8b488be8254be6df2a84",
+      "instance_id": "rich_3064",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "1ad6f73a4d1d3b40ac3f879feccfaad66412bd1d",
+      "instance_id": "rich_3067",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "9f620dc50c0008c35e9f8493f198e6e593574a70",
+      "instance_id": "rich_3105",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "720800e6930d85ad027b1e9bd0cbb96b5e994ce3",
+      "instance_id": "rich_3130",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "e76f3c3ea78481342e21a7b3328075462ab69c2b",
+      "instance_id": "rich_3180",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "4c5d305bb902ce97011666ada19e48d0b27b49e1",
+      "instance_id": "rich_3278",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "fde5d6eee3b0437eaecdcbf6f8b11aeab3a5d503",
+      "instance_id": "rich_3296",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "e1e6d745f670ff3df6b8f47377c0a4006cb74066",
+      "instance_id": "rich_3454",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "ae15db600976a7999d21653002f338d0761b180c",
+      "instance_id": "rich_3468",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "c478588f3c228a4e86741a057c42b452d7bc6bce",
+      "instance_id": "rich_3469",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "0ba607dc080c9f102b5ae5346bcdb70d6e9c969d",
+      "instance_id": "rich_3470",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "e2a982d5ea747f0deb7f78e8eaa5b4be7d9194cf",
+      "instance_id": "rich_3471",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "b6f2f7aa5b27f612f391cd28212aff51ad0d42d1",
+      "instance_id": "rich_3472",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "9ec419154102acce7363e3958bec6c261864d7fb",
+      "instance_id": "rich_3480",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "d0de442c08df8793c5ff36d9ad322ca5c47fc38c",
+      "instance_id": "rich_3486",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "4101991898ee7a09fe1706daca24af5e1e054862",
+      "instance_id": "rich_3506",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "5ba9cb56e68dcdf2db50c214d8f1412c8a50761b",
+      "instance_id": "rich_3518",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "66074922edabeac684434b4d87ee994fb97b0627",
+      "instance_id": "rich_3521",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "0f2f51b872d14588de3a65968f5cdde6fb5694a3",
+      "instance_id": "rich_3535",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "edc6b0a39b6df1c0e26d409bb5c5eda7149b2de6",
+      "instance_id": "rich_3675",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "2b5d648b2c62960deb6439f4204ed8fa6eb3cf7b",
+      "instance_id": "rich_3676",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "7d36119f8378b36129502c3281a7faffef837e02",
+      "instance_id": "rich_3718",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "2809954800af15b4027364cebf82390fe23dc194",
+      "instance_id": "rich_3772",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "49117ced6648a432d85951f72dce777038f6ce09",
+      "instance_id": "rich_3777",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "3b70db5a2997de191f7db3e422dbe4da35ca1c95",
+      "instance_id": "rich_3782",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "4d6d631a3d2deddf8405522d4b8c976a6d35726c",
+      "instance_id": "rich_3882",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "4d6d631a3d2deddf8405522d4b8c976a6d35726c",
+      "instance_id": "rich_3894",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "96dd4b60e3a7c647c43a85ad375afa690b3bb85b",
+      "instance_id": "rich_3905",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "53757bc234cf18977cade41a5b64f3abaccb0b85",
+      "instance_id": "rich_3930",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "6764b24739b580c0c32ff5ef0b971ed4cfcf4f75",
+      "instance_id": "rich_3934",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "fe55a131c2780fa856464ad04d7d6dc8a1079b72",
+      "instance_id": "rich_3935",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "05ff970926cbd0b5d0acb6fc18cdbd1fc971e582",
+      "instance_id": "rich_3938",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "c595fa95068dd2c5095d25446b2f0571bc0b3995",
+      "instance_id": "rich_3942",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "36fe3f7ca9becca4777861d5e6e625f5a4a37545",
+      "instance_id": "rich_3944",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "1d402e0c59f8765e420a5a4440eb2fca7465d1ae",
+      "instance_id": "rich_3953",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "27701029082052c6541031b6f139097230253900",
+      "instance_id": "rich_4006",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "fc41075a3206d2a5fd846c6f41c4d2becab814fa",
+      "instance_id": "rich_4070",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "1fc7cb210ae52eb099df39818ddb9569e5b14c7b",
+      "instance_id": "rich_4075",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    },
+    {
+      "base_commit": "9cb198944f8184df92217efc8b20d3fffa4b4fa0",
+      "instance_id": "rich_4076",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "58ac15120fe254886c10d6253667733c83604cb4",
+      "instance_id": "rich_4077",
+      "repo": "Textualize/rich",
+      "split": "holdout"
+    },
+    {
+      "base_commit": "19c67b9a3479841e9133bea94607c89ee931d3fc",
+      "instance_id": "rich_4079",
+      "repo": "Textualize/rich",
+      "split": "dev"
+    }
+  ]
+}

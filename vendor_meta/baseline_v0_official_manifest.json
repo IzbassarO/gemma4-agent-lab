@@ -1,0 +1,50 @@
+{
+  "copy": "agents/baseline_v0_official",
+  "file_count": 10,
+  "files": {
+    "adapters/main_lora/adapter_config.json": {
+      "bytes": 664,
+      "sha256": "75a46da2db7f3c70442e5c728f64059aff52cf64174cee7aeb3a4ec37f6e78fb"
+    },
+    "adapters/main_lora/adapter_model.safetensors": {
+      "bytes": 217672,
+      "sha256": "dcbedd989af34f5201a39606e0bd4014d351a29162dd96da418782cbbe487ad9"
+    },
+    "adapters/tool_lora/adapter_config.json": {
+      "bytes": 664,
+      "sha256": "75a46da2db7f3c70442e5c728f64059aff52cf64174cee7aeb3a4ec37f6e78fb"
+    },
+    "adapters/tool_lora/adapter_model.safetensors": {
+      "bytes": 217672,
+      "sha256": "dcbedd989af34f5201a39606e0bd4014d351a29162dd96da418782cbbe487ad9"
+    },
+    "agent.yaml": {
+      "bytes": 438,
+      "sha256": "c7fbbbbdc44778419be8e9f53a85800eeb17d0cf151e0846c46e107401b72034"
+    },
+    "configs/sampling.yaml": {
+      "bytes": 120,
+      "sha256": "3dab0b2506dae34ce92fef7b380d6073729104b23fe2cf66d44ac1d2f213aa6a"
+    },
+    "eval_config.yaml": {
+      "bytes": 232,
+      "sha256": "adb486b67535fa59b427b79d44dafc131176f1f1964d184e16046ed520ede02d"
+    },
+    "prompts/analyzer.md": {
+      "bytes": 527,
+      "sha256": "c762b062032cc8463015e589ad8b4f0e17296062e1b0ff1e78712eef9f5e2d43"
+    },
+    "prompts/system.md": {
+      "bytes": 3888,
+      "sha256": "f1cbf7943ee9687382321b1dfd9cd88581d608c1c8b8e6ea61a763bd1a3234af"
+    },
+    "sub_agents/code_analyzer.yaml": {
+      "bytes": 361,
+      "sha256": "7a764798e36cc68aa38900256245e4aed969b5439b992c7da4105b6ebcb7e62b"
+    }
+  },
+  "source": "$GEMMA4_DATASET_ROOT/sample_submission",
+  "total_bytes": 442238,
+  "tree_sha256": "4557fcf418a85aa41c0ad560a9951f05a2726e69b249850aa9607e52c3736e2c",
+  "tree_sha256_definition": "sha256 of lines 'relpath\\tsha256\\n' sorted by relpath"
+}
