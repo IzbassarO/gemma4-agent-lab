@@ -10,6 +10,7 @@ import pytest
 from tools import build_split, common
 
 REPO = Path(__file__).resolve().parent.parent
+INPUTS = ("instance_id", "repo", "base_commit")  # literal, not imported from tools.build_split
 
 
 def synth_tasks(with_gold=True, gold="A"):
@@ -51,7 +52,7 @@ def test_split_independent_of_gold_and_other_fields(tmp_path):
 def test_load_inputs_projects_to_allowed_keys(tmp_path):
     root = write_tasks(tmp_path / "ds", synth_tasks())
     rows = build_split.load_inputs(root / "tasks.jsonl")
-    assert all(set(r) == set(build_split.ALLOWED_INPUTS) for r in rows)
+    assert all(set(r) == {"instance_id", "repo", "base_commit"} for r in rows)  # literal: the only allowed inputs
     assert "patch" not in common.dumps(build_split.build_split(rows))
 
 
@@ -69,10 +70,10 @@ def test_split_shape_grouping_and_singletons(tmp_path):
 
 def test_split_order_independent_and_seed_sensitive(tmp_path):
     rows = synth_tasks()
-    a = build_split.build_split([{k: r[k] for k in build_split.ALLOWED_INPUTS} for r in rows])
-    b = build_split.build_split([{k: r[k] for k in build_split.ALLOWED_INPUTS} for r in reversed(rows)])
+    a = build_split.build_split([{k: r[k] for k in INPUTS} for r in rows])
+    b = build_split.build_split([{k: r[k] for k in INPUTS} for r in reversed(rows)])
     assert common.dumps(a) == common.dumps(b)
-    c = build_split.build_split([{k: r[k] for k in build_split.ALLOWED_INPUTS} for r in rows], seed="other")
+    c = build_split.build_split([{k: r[k] for k in INPUTS} for r in rows], seed="other")
     assert [t["split"] for t in c["tasks"]] != [t["split"] for t in a["tasks"]]
 
 

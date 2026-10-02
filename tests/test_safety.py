@@ -16,7 +16,7 @@ REPO = Path(__file__).resolve().parent.parent
 @pytest.fixture(autouse=True)
 def _isolate_env(monkeypatch):
     # never let the real $GEMMA4_DATASET_ROOT leak into fixture tests
-    monkeypatch.delenv(common.DATASET_ENV, raising=False)
+    monkeypatch.delenv("GEMMA4_DATASET_ROOT", raising=False)
 
 
 # ---- P1-1: guard ------------------------------------------------------------------------------
@@ -43,7 +43,7 @@ def test_guard_rejects_symlink_into_dataset(fake_dataset, tmp_path):
 
 
 def test_guard_protects_env_dataset_even_with_other_root(fake_dataset, tmp_path, monkeypatch):
-    monkeypatch.setenv(common.DATASET_ENV, str(fake_dataset))
+    monkeypatch.setenv("GEMMA4_DATASET_ROOT", str(fake_dataset))
     with pytest.raises(common.UnsafeOutputError):
         common.guard_output(fake_dataset / "x.json", tmp_path / "some_other_root")
 

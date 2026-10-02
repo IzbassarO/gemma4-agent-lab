@@ -20,8 +20,8 @@ from tools.common import (
     guard_output,
     iter_files,
     open_nofollow,
-    sha256_bytes,
     sha256_file,
+    tree_sha256,
     write_bytes_safe,
     write_json,
 )
@@ -35,7 +35,7 @@ class SampleMismatchError(RuntimeError):
 
 def tree_manifest(root: Path) -> dict:
     files = {p.relative_to(root).as_posix(): {"bytes": p.lstat().st_size, "sha256": sha256_file(p)} for p in iter_files(root)}
-    tree = sha256_bytes("".join(f"{k}\t{v['sha256']}\n" for k, v in sorted(files.items())).encode())
+    tree = tree_sha256({k: v["sha256"] for k, v in files.items()})
     return {"file_count": len(files), "total_bytes": sum(v["bytes"] for v in files.values()),
             "tree_sha256": tree, "tree_sha256_definition": "sha256 of lines 'relpath\\tsha256\\n' sorted by relpath",
             "files": files}

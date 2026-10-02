@@ -15,20 +15,20 @@ wheels = [
 name = "gemma4-agent-lab"
 version = "0.0.0"
 source = { virtual = "." }
+dependencies = [
+    { name = "pyyaml" },
+]
 
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
-    { name = "pyyaml" },
 ]
 
 [package.metadata]
+requires-dist = [{ name = "pyyaml", specifier = ">=6" }]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8" },
-    { name = "pyyaml", specifier = ">=6" },
-]
+dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "iniconfig"

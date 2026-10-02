@@ -3,10 +3,10 @@ name = "gemma4-agent-lab"
 version = "0.0.0"
 description = "Harness certification and experiment tooling for the Gemma 4 Developer Agent Competition"
 requires-python = ">=3.11"
-dependencies = []  # tooling is stdlib-only; the competition harness is NOT a dependency of this repo
+dependencies = ["pyyaml>=6"]  # submission validator parses YAML; the competition harness is NOT a dependency of this repo
 
 [dependency-groups]
-dev = ["pytest>=8", "pyyaml>=6"]
+dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

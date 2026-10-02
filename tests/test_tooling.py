@@ -41,12 +41,12 @@ def test_partial_sha256_detects_head_tail_and_size_changes(tmp_path):
 
 
 def test_dataset_root_requires_env_or_value(monkeypatch, tmp_path):
-    monkeypatch.delenv(common.DATASET_ENV, raising=False)
+    monkeypatch.delenv("GEMMA4_DATASET_ROOT", raising=False)
     with pytest.raises(common.DatasetRootError):
         common.dataset_root()
     with pytest.raises(common.DatasetRootError):
         common.dataset_root(str(tmp_path / "nope"))
-    monkeypatch.setenv(common.DATASET_ENV, str(tmp_path))
+    monkeypatch.setenv("GEMMA4_DATASET_ROOT", str(tmp_path))
     assert common.dataset_root() == tmp_path
 
 

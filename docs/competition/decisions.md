@@ -21,7 +21,7 @@ The same redistribution question applies to the six non-weight sample files alre
 Harness source is absent locally (L01/L02). We record NOT AVAILABLE rather than reconstruct implementations from notebook excerpts.
 *Reverse if:* harness distributions are captured from a Kaggle runtime (H23 next step).
 
-### D005 — 2026-10-02 — Repo tooling is stdlib-only
+### D005 — 2026-10-02 — Repo tooling is stdlib-only (amended by D010: PyYAML is a runtime dependency of the submission validator)
 `pytest` and `pyyaml` are dev-only. The harness is not a dependency of this repo. It will be referenced by a separate env var once captured.
 *Reverse if:* a certification script needs the harness importable, in which case it goes in its own venv.
 
@@ -39,4 +39,26 @@ Harness source is absent locally (L01/L02). We record NOT AVAILABLE rather than 
 
 ### D009 — 2026-10-02 — Raw certification results are never committable
 `harness_cert/results/` is ignored entirely, whatever the extension. Curated summaries live in `harness_cert/reports/`.
+*Reverse if:* never.
+
+### D010 — 2026-10-02 — Submission pipeline policies
+- ZIPs are `ZIP_STORED`. Deflate output depends on the zlib build, and byte identity across machines matters more than archive size. The ZIP limit that matters (< 3 GiB) is on *unpacked* bytes.
+- Packaging is an allowlist: root config, `eval_config.yaml`, the five contract dirs, plus referenced files. Other files are excluded with a warning, so READMEs/notes never ship.
+- Certification issues never block a build; they are recorded in the manifest and provenance. Structural errors always block.
+- `!include` / `config_path` are resolved file-relative first, then root-relative, and every divergence is reported under H26. New candidates keep referencing YAML at the bundle root and avoid `../`.
+- PyYAML is now a runtime dependency (`pyproject.toml`).
+*Reverse if:* H23/H26 capture shows the compiler differs; then align the validator to observed behavior.
+
+### D011 — 2026-10-02 — Submission re-audit corrections
+- Write safety is an explicit immutable `WriteGuard` passed to every writing step. Writing CLIs fail closed without a dataset root; `$GEMMA4_DATASET_ROOT` is additive protection, never the only one.
+- `--require-clean` is a per-file proof (tracked, in HEAD, index = HEAD, working-tree bytes = HEAD blob) plus a clean repository, with no override. E0's gitignored official adapters are labelled `external-official-control`, and E0's `source_in_git` is false.
+- Provenance verification recomputes facts from the ZIP, manifest, repository metadata and git objects. Unavailable environments are UNVERIFIABLE, not failures.
+- The split identity is sha256(`eval/splits/v1.json`). The sidecar is only cross-checked, and a stale sidecar fails generation and verification.
+- Archive policy also forbids comments, extra fields, non-canonical paths and normalized (path/Unicode/case) duplicates.
+- `.safetensors` must pass a container sanity check, which proves SAFETENSORS_CONTAINER_VALID only.
+- Static validation implements the documented agent/generation schema and limits; undocumented fields are warnings.
+*Reverse if:* H23/H26 capture shows the compiler differs; align to observed behavior and record it here.
+
+### D012 — 2026-10-02 — Verification evidence is tri-state
+Every verification fact is `ok`, `mismatch` or `unverifiable`, and git evidence aggregates to VERIFIED / FAILED / UNVERIFIABLE (or NOT_CLAIMED). Unavailable commits or tree objects are never coerced into a failure, and observable contradictions are never downgraded to unverifiable. Overall: FAILED / VERIFIED_WITH_UNVERIFIABLE_EVIDENCE / VERIFIED (exit 1 / 0 / 0; `--strict` makes the middle state exit 2).
 *Reverse if:* never.

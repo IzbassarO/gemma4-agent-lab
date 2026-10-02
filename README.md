@@ -28,12 +28,24 @@ bash harness_cert/scripts/git_semantics_probe.sh
 uv run --group dev pytest            # fast tests; temp fixtures only, never touch the dataset
 ```
 
-All tools are stdlib-only and deterministic: a rerun gives byte-identical JSON. Every writing tool goes through `tools.common.guard_output`, which refuses any destination at or below the dataset root (symlinks and aliases included). Traversal never follows symlinks.
+### Submission pipeline (see `docs/competition/SUBMISSION_FORMAT.md`)
+
+```bash
+uv run python -m tools.validate_submission agents/candidates/<id>                 # static checks, --json for machine output
+uv run python -m tools.build_submission agents/candidates/<id> --experiment-id EXP-... --require-clean
+uv run python -m tools.inspect_submission artifacts/submissions/<id>/submission.zip
+uv run python -m tools.hash_submission artifacts/submissions/<id>                 # VERIFIED / VERIFIED_WITH_UNVERIFIABLE_EVIDENCE / FAILED
+uv run python -m tools.package_official_control --dataset-root "$GEMMA4_DATASET_ROOT"  # E0: restore + validate + package the official sample
+```
+
+Builds go to `artifacts/submissions/<id>/` (gitignored) and are byte-identical for identical sources. Harness compatibility stays `CURRENT_HARNESS_COMPATIBILITY_UNKNOWN` until H23/H26 are resolved.
+
+All tools are deterministic (stdlib only, except PyYAML for the submission validator): a rerun gives byte-identical JSON. Every writing tool goes through `tools.common.guard_output`, which refuses any destination at or below the dataset root (symlinks and aliases included). Traversal never follows symlinks.
 
 ## Map
 
 - `docs/MASTER_HANDOFF.md`: full background (copy of the 2026-10-01 handoff)
-- `docs/competition/`: `official_facts.md`, `issue_ledger.md`, `decisions.md`, `H23_WHEELHOUSE_FINGERPRINT.md`, `STATIC_HARNESS_AUDIT.md`
+- `docs/competition/`: `official_facts.md`, `issue_ledger.md`, `decisions.md`, `H23_WHEELHOUSE_FINGERPRINT.md`, `STATIC_HARNESS_AUDIT.md`, `SUBMISSION_FORMAT.md`, `SUBMISSION_READINESS.md`
 - `docs/experiments/EXPERIMENT_PROTOCOL.md`: what every experiment must record
 - `harness_cert/matrix.yaml`: H01–H30 status
 - `agents/baseline_v0_official/`: byte-exact official sample (control; never edit)

@@ -1,6 +1,8 @@
 """Shared helpers: dataset-root resolution, output-path safety, symlink-safe traversal, hashing, JSON."""
 from __future__ import annotations
 
+import contextlib
+import dataclasses
 import hashlib
 import json
 import os
@@ -65,19 +67,66 @@ def guard_output(dest: Path, *protected: Path) -> Path:
     return resolved
 
 
-def write_bytes_safe(path: Path, data: bytes, *protected: Path) -> None:
-    """Guard, then write atomically (temp file + os.replace): never truncates in place, never writes through
-    an existing hard link or symlink at the destination."""
+@contextlib.contextmanager
+def atomic_output(path: Path, *protected: Path):
+    """Guard, then yield a binary handle to a temp file that atomically replaces `path` on success.
+    Never truncates in place; never writes through an existing hard link or symlink at the destination."""
     target = guard_output(path, *protected)
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
     try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
+        with os.fdopen(fd, "w+b") as f:
+            yield f
+        os.chmod(tmp, 0o644)  # mkstemp creates 0600; outputs are ordinary readable files
         os.replace(tmp, target)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
+
+
+@dataclasses.dataclass(frozen=True)
+class WriteGuard:
+    """Immutable, explicit write policy shared by every writing tool.
+
+    `dataset_root` is the authoritative protected dataset (an explicit --dataset-root wins); `$GEMMA4_DATASET_ROOT`
+    is protected *in addition* whenever it is set, never instead. `extra` adds more protected roots (e.g. a
+    build's source tree). All writes go through check() before any directory is created or file opened.
+    """
+    dataset_root: Path
+    extra: tuple[Path, ...] = ()
+
+    def __post_init__(self):
+        root = Path(self.dataset_root).expanduser()
+        if not root.is_dir():
+            raise DatasetRootError(f"protected dataset root {root} is not a directory")
+        object.__setattr__(self, "dataset_root", root.resolve())
+        object.__setattr__(self, "extra", tuple(Path(p).expanduser().resolve() for p in self.extra))
+
+    @classmethod
+    def from_cli(cls, explicit: str | None) -> "WriteGuard":
+        """Fail closed: a writing CLI needs a known dataset root (explicit or $GEMMA4_DATASET_ROOT)."""
+        return cls(dataset_root(explicit))
+
+    def with_extra(self, *paths: Path) -> "WriteGuard":
+        return WriteGuard(self.dataset_root, self.extra + tuple(paths))
+
+    @property
+    def protected(self) -> tuple[Path, ...]:
+        return (self.dataset_root, *self.extra)
+
+    def check(self, dest: Path) -> Path:
+        return guard_output(dest, *self.protected)
+
+    def atomic(self, dest: Path):
+        return atomic_output(dest, *self.protected)
+
+    def write_text(self, dest: Path, text: str) -> None:
+        write_text_safe(dest, text, *self.protected)
+
+
+def write_bytes_safe(path: Path, data: bytes, *protected: Path) -> None:
+    with atomic_output(path, *protected) as f:
+        f.write(data)
 
 
 def write_text_safe(path: Path, text: str, *protected: Path) -> None:
@@ -152,6 +201,11 @@ def partial_sha256(path: Path, window: int = CHUNK) -> str:
             f.seek(max(window, size - window))
             h.update(f.read(window))
     return h.hexdigest()
+
+
+def tree_sha256(file_hashes: dict[str, str]) -> str:
+    """Identity of a file tree: sha256 of 'relpath\tsha256\n' lines sorted by relpath."""
+    return sha256_bytes("".join(f"{k}\t{v}\n" for k, v in sorted(file_hashes.items())).encode())
 
 
 def dumps(obj) -> str:

@@ -12,7 +12,7 @@ Applies to every local run, GPU run and Kaggle submission. An experiment that is
 | `single_change` | The one intended change relative to the parent. If more than one is unavoidable, list each and justify |
 | `git_commit` | Commit of this repo the artifact was built from (clean tree) |
 | `config_hashes` | sha256 of every config that affected the run (`agent.yaml`, sub-agents, prompts, `eval_config.yaml`, run config) |
-| `artifact_hashes` | `submission_zip_sha256` and `bundle_tree_sha256` (definition in `tools/preserve_sample.py`) |
+| `artifact_hashes` | `submission_zip_sha256` and `bundle_tree_sha256` (= `source_tree_sha256` in the build's `provenance.json`; definition `tools.common.tree_sha256`) |
 | `wheelhouse_fingerprint_sha256` | From `vendor_meta/wheelhouse_manifest.json` at run time |
 | `harness_versions` | swegemma / adk-submission / adk-eval-core / google-adk / litellm / vllm **as observed in that runtime**, or `null`. Never copied from a forum post |
 | `hardware_runtime` | e.g. `mac-m1pro-subprocess`, `colab-<gpu>`, `kaggle-scorer` |

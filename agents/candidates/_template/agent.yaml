@@ -1,0 +1,21 @@
+# NON-COMPETITIVE TEMPLATE: structure only, no tuned behavior. See README.md in this directory.
+# Copy to agents/candidates/<candidate-id>/ and replace every TEMPLATE_PLACEHOLDER; the validator refuses to
+# package any file that still contains it.
+name: candidate_agent
+model: gemma-4-31b-it-qat-w4a16-ct
+description: TEMPLATE_PLACEHOLDER one-line description of this candidate.
+# Same-directory include only: parent-relative (`../`) includes are H26-unresolved.
+instruction: !include prompts/system.md
+# All 9 built-in tools declared. Removing tools is uncertified (H04 undeclared-tool behavior, H30 advertisement).
+tools:
+  - run_command
+  - read_file
+  - edit_file
+  - write_file
+  - get_status
+  - submit_patch
+  - get_code_neighbors
+  - search_similar_code
+  - get_code_subgraph
+# generate_content_config deliberately omitted: thinking/reasoning behavior is uncertified (H01/H02/H03).
+# No adapter, sub_agents or agent_tool: LoRA deferred (H16/H24/H25); AgentTool/compaction uncertified (H20/H15/H19).
