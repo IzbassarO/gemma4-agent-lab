@@ -5,7 +5,7 @@ import io
 
 import pytest
 
-from tools.h23_v4.record_policy import classify_record_rows, derive_distribution_rows, parse_record
+from tools.h23_v4.record_policy import canonical_components, classify_record_rows, derive_distribution_rows, parse_record
 from tools.h23_v4.schema import PolicyError
 
 
@@ -147,6 +147,70 @@ def test_dotfiles_still_require_exact_distribution_ownership(path):
     with pytest.raises(PolicyError) as caught:
         classify_record_rows(*_litellm_record(path))
     assert caught.value.code == "RECORD_OWNERSHIP"
+
+
+@pytest.mark.parametrize("path", [
+    "litellm/proxy/__next.!KGRhc2hib2FyZCk.txt",
+    "litellm/proxy/contentfilter_(age_discrimination.yaml).json",
+    "litellm/proxy/notes with spaces.txt",
+    "litellm/proxy/.hidden-file (draft)!_v1.json",
+    "litellm/proxy/notes,quotes\"and'symbols;[draft]{v1}#@&=+%.txt",
+    "litellm/proxy/key:value.json",
+    "litellm/proxy/café (déjà vu).txt",
+    "litellm/proxy/ spaced name ",
+])
+def test_posix_filename_punctuation_is_owned_regular_record_data(path):
+    classified = classify_record_rows(*_litellm_record(path))
+    assert {row.path: category for row, category in classified}[path] == "owned_regular"
+    assert canonical_components(path) == ("litellm", "proxy", path.removeprefix("litellm/proxy/"))
+
+
+@pytest.mark.parametrize("path", [
+    "litellm/proxy/__next.!KGRhc2hib2FyZCk.txt/..",
+    "litellm/proxy/../contentfilter_(age_discrimination.yaml).json",
+    "litellm/proxy/./contentfilter_(age_discrimination.yaml).json",
+    "litellm/proxy//contentfilter_(age_discrimination.yaml).json",
+    "litellm/proxy/contentfilter_(age_discrimination.yaml).json/",
+    "/litellm/proxy/__next.!KGRhc2hib2FyZCk.txt",
+    "litellm/proxy\\contentfilter_(age_discrimination.yaml).json",
+    "C:/litellm/proxy/__next.!KGRhc2hib2FyZCk.txt",
+    "c:litellm/proxy/contentfilter_(age_discrimination.yaml).json",
+])
+def test_posix_punctuation_does_not_allow_unsafe_record_paths(path):
+    with pytest.raises(PolicyError) as caught:
+        classify_record_rows(*_litellm_record(path))
+    assert caught.value.code == "RECORD_PATH"
+
+
+@pytest.mark.parametrize("control", ["\x00", "\t", "\n", "\r", "\x1f", "\x7f", "\x80", "\x85", "\x9f"])
+def test_posix_components_reject_ascii_and_c1_controls(control):
+    with pytest.raises(PolicyError) as caught:
+        canonical_components("litellm/proxy/contentfilter_(age" + control + "_discrimination.yaml).json")
+    assert caught.value.code == "RECORD_PATH"
+
+
+@pytest.mark.parametrize("path", [
+    "litellm_sibling/proxy/__next.!KGRhc2hib2FyZCk.txt",
+    ".litellm/proxy/contentfilter_(age_discrimination.yaml).json",
+])
+def test_posix_punctuation_does_not_expand_distribution_ownership(path):
+    with pytest.raises(PolicyError) as caught:
+        classify_record_rows(*_litellm_record(path))
+    assert caught.value.code == "RECORD_OWNERSHIP"
+
+
+@pytest.mark.parametrize("collision", [
+    "litellm/proxy/REPORT (draft)!.txt", "litellm/proxy/report (draft)!.txt/data.json",
+])
+def test_posix_punctuation_preserves_case_and_prefix_collision_checks(collision):
+    distribution, interpreter, raw = _litellm_record("litellm/proxy/report (draft)!.txt")
+    rows = list(csv.reader(io.StringIO(raw.decode())))
+    rows.append([collision, rows[0][1], rows[0][2]])
+    stream = io.StringIO(newline="")
+    csv.writer(stream, lineterminator="\n").writerows(rows)
+    with pytest.raises(PolicyError) as caught:
+        classify_record_rows(distribution, interpreter, stream.getvalue().encode())
+    assert caught.value.code == "RECORD_COLLISION"
 
 
 @pytest.mark.parametrize("extra", [

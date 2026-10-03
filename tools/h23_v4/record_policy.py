@@ -23,7 +23,6 @@ OWNED_PREFIXES = {
 }
 HARNESS_DISTRIBUTIONS = frozenset(("swegemma", "adk-submission", "adk-eval-core"))
 SOURCE_SUFFIXES = frozenset((".py", ".pyi", ".json", ".yaml", ".yml", ".toml", ".txt", ".md", ".cfg", ".ini", ".typed", ".j2", ".jinja"))
-_COMPONENT = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_.+-]*\Z")
 _HASH = re.compile(r"sha256=([A-Za-z0-9_-]{43})\Z")
 _DECIMAL = re.compile(r"(?:0|[1-9][0-9]{0,9})\Z")
 
@@ -92,10 +91,13 @@ def _validate_csv_quoting(text):
 
 
 def canonical_components(path):
-    if type(path) is not str or not path or len(path) > MAX_RECORD_FIELD or path.startswith("/") or "\\" in path or any(ord(c) < 32 or ord(c) == 127 for c in path):
+    """Validate path structure without restricting POSIX filename punctuation."""
+    if (type(path) is not str or not path or len(path) > MAX_RECORD_FIELD
+            or path.startswith("/") or re.match(r"^[A-Za-z]:", path) or "\\" in path
+            or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in path)):
         raise PolicyError("RECORD_PATH")
     parts = tuple(path.split("/"))
-    if any(part in ("", ".", "..") or _COMPONENT.fullmatch(part) is None for part in parts):
+    if any(part in ("", ".", "..") for part in parts):
         raise PolicyError("RECORD_PATH")
     return parts
 
