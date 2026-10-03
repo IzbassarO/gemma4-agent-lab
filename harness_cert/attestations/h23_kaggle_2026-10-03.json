@@ -1,0 +1,29 @@
+{
+  "schema": "H23_HUMAN_ATTESTATION_V1",
+  "label": "HUMAN-ATTESTED",
+  "git_commit_sha": "df77d5c3f804aed896a09cf0484b9d19dde8c9da",
+  "executed_notebook_sha256": "a05fd2ed6dd53cbeea32be67e34d93e722bccc54b636e408c7aef72a3ae3d3db",
+  "kaggle_notebook": {
+    "owner": "izbassaro",
+    "name": "notebooka2687d8703",
+    "immutable_version": 354974356,
+    "permalink": "https://www.kaggle.com/code/izbassaro/notebooka2687d8703?scriptVersionId=354974356"
+  },
+  "wheelhouse_dataset": {
+    "owner": "metric",
+    "name": "gemma-4-developer-agent-wheelhouse",
+    "immutable_version": 28
+  },
+  "capture_zip_sha256": "b090d51980dc4b8d2a347d3a17fc2242c1aa01e0bb05d0c3d27742a4bacae566",
+  "validation_receipt_sha256": "0ac24b582dc0a9e08c0a2460bd113fd44c9e6ad97f8d48ccea8a42c2ef2bad6b",
+  "validation_receipt_reference": "harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md#technical-validation-receipt",
+  "attester": "izbassaro",
+  "attested_utc": "2026-10-03T18:56:04Z",
+  "personally_checked": {
+    "git_and_notebook_identity_checked": true,
+    "immutable_notebook_version_and_permalink_checked": true,
+    "immutable_wheelhouse_version_checked": true,
+    "capture_zip_and_receipt_identity_checked": true,
+    "receipt_scope_and_limitations_reviewed": true
+  }
+}

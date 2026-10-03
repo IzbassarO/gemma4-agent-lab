@@ -6,7 +6,7 @@
 
 ## Verdict in one paragraph
 
-The local `wheels/` directory was fully fingerprinted: 124 wheels, 41 projects, no corrupt zips, METADATA present in every wheel, and filename and METADATA versions agree for all 124. **None of the scorer's harness stack is in it**: no `swegemma`, `adk-submission`, `adk-eval-core`, `google-adk`, `google-genai`, `litellm`, `vllm`, `transformers`, `networkx`, `numpy`, `pandas`, `pyarrow` or `docker`. Its contents are sandbox test dependencies (STATIC-OBSERVED). `docker/Dockerfile.public` copies it to `/wheels` (STATIC-OBSERVED), and the README documents `/wheels` as the offline source for the in-container editable/test installs (OFFICIAL-DOCUMENTED). Whether the scorer's `/wheels` is byte-identical to this directory is HOST-UNKNOWN. The harness versions running on the Kaggle scorer therefore **cannot be determined from local data**. H23 cannot be PASS. It is not FAIL either, because nothing contradicts a fingerprint. It is HOST-UNKNOWN until we capture the versions on a Kaggle runtime.
+The local `wheels/` directory was fully fingerprinted: 124 wheels, 41 projects, no corrupt zips, METADATA present in every wheel, and filename and METADATA versions agree for all 124. **None of the scorer's harness stack is in it**: no `swegemma`, `adk-submission`, `adk-eval-core`, `google-adk`, `google-genai`, `litellm`, `vllm`, `transformers`, `networkx`, `numpy`, `pandas`, `pyarrow` or `docker`. Its contents are sandbox test dependencies (STATIC-OBSERVED). `docker/Dockerfile.public` copies it to `/wheels` (STATIC-OBSERVED), and the README documents `/wheels` as the offline source for the in-container editable/test installs (OFFICIAL-DOCUMENTED). Whether the scorer's `/wheels` is byte-identical to this directory is HOST-UNKNOWN. The harness versions running on the Kaggle scorer therefore **cannot be determined from local data**. H23 cannot be PASS. It is not FAIL either, because nothing contradicts a fingerprint. The [2026-10-03 interactive Kaggle capture](../../harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md) now has a `CAPTURE_VALIDATED` technical receipt, but its bootstrap reported `EXIT_NONZERO` (code 1). H23 remains **HOST-UNKNOWN**, and the hidden scorer remains **SCORER_ONLY_UNKNOWN**.
 
 ## Wheelhouse fingerprint
 
@@ -74,12 +74,22 @@ Other notable versions: pytest 6.2.5 / 8.3.4 / 9.1.1 · fastapi 0.141.1 · starl
    So FastAPI-task sandbox runs on this Mac either need amd64 emulation or are not faithful. (INFERENCE; to be tested when the harness is available.)
 2. **Python 3.12 and 3.13 binaries are both present**, but the Dockerfile is 3.13. Some other runtime (perhaps the Kaggle host interpreter for the subprocess backend) uses 3.12. (INFERENCE.)
 
-## What would move H23 out of HOST-UNKNOWN
+## Current capture checkpoint and remaining blocker
 
-A CPU-only Kaggle notebook attached to the competition, with no GPU and no submission, that records:
+The [2026-10-03 checkpoint](../../harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md)
+records an operator-reported Kaggle Version 3 run (`scriptVersionId=354974356`)
+with `metric/gemma-4-developer-agent-wheelhouse` v28. Its archive has a
+`CAPTURE_VALIDATED` technical receipt; the operator reports import durability
+`CONFIRMED` and no warnings. These are observations from an interactive notebook,
+not a hidden scorer fingerprint.
 
-- `importlib.metadata.version()` for swegemma, adk-submission, adk-eval-core, google-adk, google-genai, litellm, vllm, transformers, networkx, numpy;
-- each distribution's `RECORD` hashes;
-- the site-packages source of the three harness packages, archived to `/kaggle/working` for download.
+The `OFFICIAL_NOTEBOOK_CELL_2` bootstrap reported `EXIT_NONZERO` (code 1).
+Observed pre-existing distributions after that failure do not prove successful
+installation of the requested wheelhouse stack. Neither technical validation
+nor the separate operator attestation establishes successful scorer-stack
+reproduction. The local 124-wheel fingerprint above remains a separate static
+observation.
 
-That gives OWN-KAGGLE-RUN evidence for the *notebook* image. The scorer image could still differ: H23 becomes `VERSION-SPECIFIC` (pinned to that capture date), not PASS.
+The next blocker is confirming the exact bootstrap failure and obtaining a
+usable harness/compiler environment for CPU certification. H23 stays
+**HOST-UNKNOWN**; the hidden scorer stays **SCORER_ONLY_UNKNOWN**.

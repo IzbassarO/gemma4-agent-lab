@@ -42,7 +42,7 @@ Builds go to `artifacts/submissions/<id>/` (gitignored) and are byte-identical f
 
 Existing inventory/submission tools are deterministic (stdlib only, except PyYAML for the submission validator): a rerun gives byte-identical JSON. Their writing steps use `tools.common.WriteGuard`, which refuses destinations at or below the dataset root (symlinks and aliases included). Traversal never follows symlinks.
 
-### H23 protocol v4 candidate
+### H23 protocol v4 capture checkpoint
 
 [H23_PROTOCOL_V4.md](docs/competition/H23_PROTOCOL_V4.md) defines the new untrusted
 observation archive, technical importer, external receipt and separate human
@@ -50,7 +50,14 @@ attestation. Schema 3 is rejected/historical; there is no compatibility reader.
 The importer publishes only beneath an existing private external evidence root,
 using descriptor-relative protected-root checks and atomic no-replace storage.
 Its results are `CAPTURE_VALIDATED` / `CAPTURE_REJECTED`, without origin or
-installation promotion. H23 remains **HOST-UNKNOWN**; no Kaggle run occurred.
+installation promotion. The [2026-10-03 real Kaggle Version 3 capture](harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md)
+(`scriptVersionId=354974356`, wheelhouse v28) was `CAPTURE_VALIDATED`, with
+`CONFIRMED` durability and no warnings. Bootstrap returned `EXIT_NONZERO`
+(code 1), so successful capture does not establish successful bootstrap or
+reproduction of the official evaluation stack. H23 remains **HOST-UNKNOWN**;
+the hidden scorer remains **SCORER_ONLY_UNKNOWN**. Step 0 is incomplete: the
+next blocker is confirming the bootstrap failure and obtaining a usable
+harness/compiler environment for CPU certification.
 
 ```bash
 python -m tools.build_h23_v4_notebook --check   # exact reviewed source embedding, no execution

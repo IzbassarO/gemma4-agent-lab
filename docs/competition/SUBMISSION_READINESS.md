@@ -3,7 +3,7 @@
 **Repository:** `https://github.com/IzbassarO/gemma4-agent-lab`  
 **Branch:** `main`  
 **Foundation commit:** `61f5669` — `chore: establish Step 0 competition research foundation`  
-**Status date:** 2026-10-02  
+**Status date:** 2026-10-03\
 **Competition phase:** STEP 0 — Competition Environment & Harness Certification  
 **Current readiness:** **FOUNDATION READY / COMPETITION SUBMISSION NOT YET READY**
 
@@ -31,7 +31,7 @@ When sources disagree, use this order:
 2. **OFFICIAL-HARNESS** — current competition `HARNESS_README.md`, installed harness code, and scorer-visible configuration.
 3. **OFFICIAL-NOTEBOOK** — pinned Google/Kaggle Getting Started notebook at a recorded version.
 4. **REPRODUCED-LOCAL** — behavior reproduced by us with a versioned harness/runtime.
-5. **OWN-KAGGLE-RUN** — our own scored Kaggle execution with exact artifact provenance.
+5. **OWN-KAGGLE-RUN** — our own Kaggle execution with exact artifact provenance; capture, bootstrap, and scored outcomes remain distinct.
 6. **COMMUNITY-EVIDENCE** — public notebooks/forum reports; useful but version-sensitive.
 7. **INFERENCE** — architectural hypotheses awaiting experiment.
 
@@ -477,7 +477,7 @@ Optimization priority is based on the largest controllable failure class, not th
 | Locked split | **PASS** | 80 DEV / 49 HOLDOUT, no base-commit crossing |
 | Experiment protocol | **PASS** | Leakage/LB rules frozen |
 | Failure taxonomy | **PASS** | 20 categories |
-| Current harness package fingerprint | **HOST-UNKNOWN** | Need scorer/runtime capture |
+| Current harness package fingerprint | **HOST-UNKNOWN** | Real Kaggle Version 3 capture validated; bootstrap `EXIT_NONZERO`; hidden scorer `SCORER_ONLY_UNKNOWN` |
 | H26 include semantics | **NOT-REPRODUCED** | Requires actual harness/compiler |
 | File/edit serialization certification | **NOT-REPRODUCED** | H06–H10/H17 |
 | Tool fatal/recovery certification | **NOT-REPRODUCED** | H04/H05/H18/H30 |
@@ -493,55 +493,37 @@ Optimization priority is based on the largest controllable failure class, not th
 
 ---
 
-## 15. Immediate next milestone — Harness Provenance Acquisition
+## 15. Current H23 checkpoint and next milestone
 
 The next task is **not agent development**.
 
-We need to identify how the official Getting Started notebook obtains the real evaluation stack and then capture that exact environment from Kaggle.
+The real **OWN-KAGGLE-RUN** checkpoint is [the 2026-10-03 H23 capture report](../../harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md), with a separate [operator attestation](../../harness_cert/attestations/h23_kaggle_2026-10-03.json). Notebook `izbassaro/notebooka2687d8703` ran at visible Version 3 of 3, immutable `scriptVersionId=354974356`, with `metric/gemma-4-developer-agent-wheelhouse` v28 (41 visible files). Technical import returned `CAPTURE_VALIDATED`, durability `CONFIRMED`, and no warnings.
+
+The executed `OFFICIAL_NOTEBOOK_CELL_2` bootstrap returned `EXIT_NONZERO` (code 1). Successful Kaggle capture does not mean successful bootstrap. The observed Python 3.13.15 interactive runtime contained pre-existing `google-adk` 2.7.1, `google-genai` 2.12.1, `litellm` 1.85.7, and `transformers` 5.16.1 after that failure; these observations do not prove installation of the requested wheelhouse stack. Some reported wheelhouse files are cp312-specific: the difference from observed Python 3.13.15 is a strong diagnostic lead, not a confirmed root cause.
+
+Interactive Kaggle runtime does not establish hidden scorer runtime. H23 stays **HOST-UNKNOWN**, and the hidden scorer stays **SCORER_ONLY_UNKNOWN**. The failed bootstrap prevents claiming successful reproduction of the official evaluation stack. **Step 0 is not complete.**
+
+The next blocker is determining the exact bootstrap failure and obtaining a usable harness/compiler environment for CPU certification.
 
 Target flow:
 
 ```text
-Official Getting Started notebook
+Validated real Kaggle capture + failed bootstrap evidence
         ↓
-identify package/bootstrap source
+reproduce and confirm the exact bootstrap failure
         ↓
-CPU-only Kaggle environment capture
+obtain a usable harness/compiler environment
         ↓
-versions + RECORD hashes + relevant installed source
+verify installed stack identity and relevant source
         ↓
 GEMMA4_HARNESS_ROOT
         ↓
-H23 becomes version-specific and reproducible
+CPU-only compiler/harness certification
         ↓
 H26 / H06 / H08 / H09 / H10
 ```
 
-Capture at minimum:
-
-```text
-swegemma
-adk-submission
-adk-eval-core
-google-adk
-google-genai
-litellm
-vllm
-transformers
-```
-
-For each available package record:
-
-- installed version;
-- installation location;
-- wheel/distribution metadata;
-- `RECORD` identity when available;
-- source-tree hash;
-- selected relevant source files;
-- notebook/runtime timestamp;
-- Kaggle dataset/notebook version involved.
-
-The capture belongs outside Git as raw evidence. Only sanitized fingerprints and audit conclusions belong in the repository.
+The raw capture and canonical external evidence remain outside curated repository records. Only the report and separate human attestation record this checkpoint; neither promotes a failed bootstrap into scorer-stack reproduction.
 
 ---
 

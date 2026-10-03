@@ -4,7 +4,13 @@ This is a clean architecture reset on `feat/h23-protocol-v4`. Schema 3 was
 rejected and is historical on `archive/h23-schema3-rejected`. V4 has no legacy
 reader, conversion, compatibility mode, source-shaped extraction, installation
 attribution engine, or automatic origin promotion. H23 remains **HOST-UNKNOWN**.
-No real Kaggle capture, model run, GPU execution, or H26 certification occurred.
+The [2026-10-03 capture checkpoint](../../harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md)
+records an operator-reported Kaggle Version 3 run (`scriptVersionId=354974356`)
+with wheelhouse v28. Its archive has a `CAPTURE_VALIDATED` technical receipt;
+the operator reports import durability `CONFIRMED` and no warnings. The reported
+bootstrap was `EXIT_NONZERO` (code 1). This checkpoint does not establish
+successful scorer-stack reproduction, model/GPU behavior, or H26 certification;
+the hidden scorer remains **SCORER_ONLY_UNKNOWN**.
 
 ## Three separate layers
 
@@ -212,13 +218,15 @@ scripts must be `<prefix>/bin` and the command executable must be directly in
 that directory. For `posix_local`, the only site root is
 `<prefix>/local/lib/python<major>.<minor>/dist-packages`, scripts must be
 `<prefix>/local/bin`, and the command executable must be directly in
-`<prefix>/bin` or in that scripts directory. Recorded Kaggle output shows this
-layout with prefix `/usr` and Python 3.12. Every installation root must be an
-observed site root, and the console-script path is computed from the same
+`<prefix>/bin` or in that scripts directory. The Version 3 checkpoint reports
+this layout with prefix `/usr` and Python 3.13.15. Every installation root must
+be an observed site root, and the console-script path is computed from the same
 accepted scripts directory. Mixed observations, neighbouring roots, a wrong
 minor version, other schemes (`deb_system`, `posix_home`, `posix_user`), macOS
-framework layouts outside these profiles and Windows fail closed; v4 has not
-yet been exercised in a real Kaggle image.
+framework layouts outside these profiles and Windows fail closed. The
+operator-reported Version 3 capture exercised v4 in an interactive Kaggle
+runtime; its failed bootstrap does not establish the hidden scorer's platform
+or package stack. See the [capture checkpoint](../../harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md).
 
 The sole external RECORD exception is a console basename matching
 `[A-Za-z0-9_][A-Za-z0-9_.-]*`, declared exactly once with exact case under that
@@ -358,13 +366,16 @@ They cannot establish origin, truthful command execution, pip causality,
 omitted-byte hashes, exhaustive installation, source secret-freedom,
 runtime/importability/code safety, or hidden scorer version.
 
-Humans may later author a **separate** `H23_HUMAN_ATTESTATION_V1` ledger with
+Humans may author a **separate** `H23_HUMAN_ATTESTATION_V1` ledger with
 label `HUMAN-ATTESTED`. Required fields: Git commit SHA; executed notebook SHA;
 Kaggle owner/name, immutable notebook version and matching permalink;
 wheelhouse dataset owner/name and immutable version; capture ZIP SHA; receipt
 SHA/reference; attester; UTC timestamp; and all five explicit personally
-checked checklist entries defined in `attestation.py`. No real attestation is
-created by this reset. The read-only checker validates format only, neither
+checked checklist entries defined in `attestation.py`. The current checkpoint
+has a separate operator attestation linked from its
+[report](../../harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md); it does not
+change the technical receipt or establish successful scorer-stack reproduction.
+The read-only checker validates format only, neither
 authenticates a human nor promotes a run. Later deliberate project review may
 commit a tiny ledger reference. It is not part of importer operation.
 
@@ -423,6 +434,8 @@ declarations/ownership, metadata projections, protected-root races, cleanup/
 recovery/conflicts/idempotence, failed bootstrap, fabricated origin, and exact
 notebook/core drift. Existing submission/split/data-boundary tests must also
 remain green. Recommendation for this candidate: **AUDIT V4 only**.
-This final narrow corrective pass requires a **FINAL NARROW RE-AUDIT** before
-any commit or first real Kaggle capture. H23 remains HOST-UNKNOWN and the hidden
-scorer remains SCORER_ONLY_UNKNOWN.
+The [Version 3 capture checkpoint](../../harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md)
+now records technical validation of an operator-reported real run with a failed
+bootstrap. The next blocker is confirming the exact bootstrap failure and
+obtaining a usable harness/compiler environment. H23 remains HOST-UNKNOWN and
+the hidden scorer remains SCORER_ONLY_UNKNOWN.

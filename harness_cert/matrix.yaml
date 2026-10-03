@@ -391,6 +391,7 @@ items:
     authority:
       - "OFFICIAL-HARNESS (dataset wheels/)"
       - "REPRODUCED-LOCAL (vendor_meta/wheelhouse_manifest.json)"
+      - "OWN-KAGGLE-RUN (2026-10-03, izbassaro/notebooka2687d8703 Version 3, scriptVersionId 354974356; metric/gemma-4-developer-agent-wheelhouse v28)"
     local_possible: true
     requires_model: false
     requires_gpu: false
@@ -404,8 +405,14 @@ items:
       Local wheelhouse fingerprinted (124 wheels, fingerprint acb7649a...). It contains only sandbox test dependencies;
       swegemma, adk-submission, adk-eval-core, google-adk, litellm, vllm, networkx, numpy, pandas, pyarrow, docker are absent.
       Harness versions on the scorer host are therefore unknown from local data.
-      H23_CAPTURE_PROTOCOL_V4 is a local candidate for independent audit only; no Kaggle capture or human
-      run attestation exists. Technical CAPTURE_VALIDATED cannot resolve origin or hidden scorer identity.
+      Real H23_CAPTURE_PROTOCOL_V4 capture: OWN-KAGGLE-RUN Version 3 / scriptVersionId 354974356,
+      wheelhouse v28 (41 visible files). Technical CAPTURE_VALIDATED; operator-reported durability CONFIRMED,
+      warning_codes []. Bootstrap EXIT_NONZERO (return_code 1); successful official evaluation-stack reproduction
+      is not established. Interactive runtime observations do not identify the hidden scorer, which remains
+      SCORER_ONLY_UNKNOWN; H23 stays HOST-UNKNOWN. Curated report:
+      harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md; operator ledger:
+      harness_cert/attestations/h23_kaggle_2026-10-03.json. Next blocker: confirm the exact bootstrap failure
+      and obtain a usable harness/compiler environment for CPU certification; Step 0 is not complete.
 
   - id: H24
     title: LoRA effective-output delta
