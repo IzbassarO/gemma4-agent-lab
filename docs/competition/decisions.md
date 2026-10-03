@@ -62,3 +62,17 @@ Harness source is absent locally (L01/L02). We record NOT AVAILABLE rather than 
 ### D012 — 2026-10-02 — Verification evidence is tri-state
 Every verification fact is `ok`, `mismatch` or `unverifiable`, and git evidence aggregates to VERIFIED / FAILED / UNVERIFIABLE (or NOT_CLAIMED). Unavailable commits or tree objects are never coerced into a failure, and observable contradictions are never downgraded to unverifiable. Overall: FAILED / VERIFIED_WITH_UNVERIFIABLE_EVIDENCE / VERIFIED (exit 1 / 0 / 0; `--strict` makes the middle state exit 2).
 *Reverse if:* never.
+
+### D013 — 2026-10-02 — H23 clean protocol-v4 architecture reset
+Schema 3 is rejected/historical on `archive/h23-schema3-rejected`; the candidate
+on `feat/h23-protocol-v4` has no compatibility reader or copied installation
+attribution engine. Capture observations are untrusted. Import only returns
+CAPTURE_VALIDATED / CAPTURE_REJECTED and publishes an exact snapshot plus
+technical receipt to an existing private external evidence root. Failed pip
+observations may validate; technical validation never promotes origin or scorer
+identity. A separate manually authored human ledger may support later project
+review after a real run. H23 stays HOST-UNKNOWN; hidden scorer stays
+SCORER_ONLY_UNKNOWN. The bounded policy and limits are specified in
+`H23_PROTOCOL_V4.md`. No Kaggle/model/GPU/H26 work is included.
+*Reverse if:* a reviewed new protocol changes the trust boundary; never infer
+remote provenance or runtime behavior from an archive alone.

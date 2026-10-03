@@ -40,7 +40,22 @@ uv run python -m tools.package_official_control --dataset-root "$GEMMA4_DATASET_
 
 Builds go to `artifacts/submissions/<id>/` (gitignored) and are byte-identical for identical sources. Harness compatibility stays `CURRENT_HARNESS_COMPATIBILITY_UNKNOWN` until H23/H26 are resolved.
 
-All tools are deterministic (stdlib only, except PyYAML for the submission validator): a rerun gives byte-identical JSON. Every writing tool goes through `tools.common.guard_output`, which refuses any destination at or below the dataset root (symlinks and aliases included). Traversal never follows symlinks.
+Existing inventory/submission tools are deterministic (stdlib only, except PyYAML for the submission validator): a rerun gives byte-identical JSON. Their writing steps use `tools.common.WriteGuard`, which refuses destinations at or below the dataset root (symlinks and aliases included). Traversal never follows symlinks.
+
+### H23 protocol v4 candidate
+
+[H23_PROTOCOL_V4.md](docs/competition/H23_PROTOCOL_V4.md) defines the new untrusted
+observation archive, technical importer, external receipt and separate human
+attestation. Schema 3 is rejected/historical; there is no compatibility reader.
+The importer publishes only beneath an existing private external evidence root,
+using descriptor-relative protected-root checks and atomic no-replace storage.
+Its results are `CAPTURE_VALIDATED` / `CAPTURE_REJECTED`, without origin or
+installation promotion. H23 remains **HOST-UNKNOWN**; no Kaggle run occurred.
+
+```bash
+python -m tools.build_h23_v4_notebook --check   # exact reviewed source embedding, no execution
+python -m pytest                             # existing suite plus literal v4 fixtures
+```
 
 ## Map
 

@@ -404,6 +404,8 @@ items:
       Local wheelhouse fingerprinted (124 wheels, fingerprint acb7649a...). It contains only sandbox test dependencies;
       swegemma, adk-submission, adk-eval-core, google-adk, litellm, vllm, networkx, numpy, pandas, pyarrow, docker are absent.
       Harness versions on the scorer host are therefore unknown from local data.
+      H23_CAPTURE_PROTOCOL_V4 is a local candidate for independent audit only; no Kaggle capture or human
+      run attestation exists. Technical CAPTURE_VALIDATED cannot resolve origin or hidden scorer identity.
 
   - id: H24
     title: LoRA effective-output delta

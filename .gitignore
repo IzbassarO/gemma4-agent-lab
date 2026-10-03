@@ -69,6 +69,13 @@ logs/
 *.parquet
 submission.zip
 *.zip
+# H23 captures and external receipts are never automatically Git evidence.
+# The reviewed v4 notebook and code are tracked; real archives/receipts stay external.
+h23_capture_v4_*
+*.evidence.zip
+*.h23-receipt.json
+.h23v4-staging-*/
+.h23v4.lock
 
 # ---- Secrets / env ----
 .env
