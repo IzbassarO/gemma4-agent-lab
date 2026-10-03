@@ -244,6 +244,11 @@ def _ignored(path: str) -> bool:
     ("artifacts/local_runs/run1/summary.json", True),
     ("eval/splits/v1.json", False),
     ("docs/competition/official_facts.md", False),
+    ("docs/competition/H23_HARNESS_CAPTURE_PLAN.md", False),   # must not be caught by capture patterns (case-insensitive FS)
+    ("notebooks/h23_harness_capture.ipynb", False),
+    ("vendor_meta/h23_captures/20261003T000000Z_abc.json", False),
+    ("h23_capture/sources/swegemma/x.py", True),
+    ("h23_harness_capture_20261003T000000Z.zip", True),
 ])
 def test_gitignore(path, ignored):
     if not (REPO / ".git").exists():

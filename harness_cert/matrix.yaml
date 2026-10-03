@@ -404,6 +404,8 @@ items:
       Local wheelhouse fingerprinted (124 wheels, fingerprint acb7649a...). It contains only sandbox test dependencies;
       swegemma, adk-submission, adk-eval-core, google-adk, litellm, vllm, networkx, numpy, pandas, pyarrow, docker are absent.
       Harness versions on the scorer host are therefore unknown from local data.
+      Capture prepared (not run): notebooks/h23_harness_capture.ipynb + tools/import_h23_capture.py; see
+      docs/competition/H23_HARNESS_CAPTURE_PLAN.md. An interactive capture can support at most VERSION-SPECIFIC.
 
   - id: H24
     title: LoRA effective-output delta

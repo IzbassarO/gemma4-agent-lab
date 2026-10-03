@@ -62,3 +62,27 @@ Harness source is absent locally (L01/L02). We record NOT AVAILABLE rather than 
 ### D012 — 2026-10-02 — Verification evidence is tri-state
 Every verification fact is `ok`, `mismatch` or `unverifiable`, and git evidence aggregates to VERIFIED / FAILED / UNVERIFIABLE (or NOT_CLAIMED). Unavailable commits or tree objects are never coerced into a failure, and observable contradictions are never downgraded to unverifiable. Overall: FAILED / VERIFIED_WITH_UNVERIFIABLE_EVIDENCE / VERIFIED (exit 1 / 0 / 0; `--strict` makes the middle state exit 2).
 *Reverse if:* never.
+
+### D013 — 2026-10-02 — H23 capture is prepared as an interactive-notebook capture only
+The official Getting Started notebook (cell 2) installs all selected non-cutlass wheels of the mounted `metric/gemma-4-developer-agent-wheelhouse` dataset with `pip --no-deps --force-reinstall`. The capture notebook replicates only that step on CPU and records pre/post environments, the wheelhouse inventory, per-target metadata/RECORD and the source of the three harness distributions. Every package stays `SCORER_ONLY_UNKNOWN`, so H23 can at most become VERSION-SPECIFIC for the interactive bootstrap. Raw evidence lives outside Git (`$GEMMA4_HARNESS_ROOT`); only a hashes/versions summary is committed.
+*Reverse if:* the host documents the scorer's environment, or an own scorer-side capture becomes possible.
+
+### D014 — 2026-10-02 — H23 capture rev 2: evidence states, fail-closed bootstrap, no code execution
+Capture logic is the stdlib module `tools/h23_capture_core.py`, embedded verbatim into the notebook by `tools/build_h23_notebook.py`.
+- **States:** BOOTSTRAP_NOT_RUN / FAILED / SUCCEEDED, then CAPTURE_VALIDATED (importer only). A pip failure is fail-closed, and `harness_only` is NON_OFFICIAL_PARTIAL_BOOTSTRAP.
+- **Attribution** comes only from byte-level wheel-content verification; pre/post content fingerprints decide INSTALLED / UNCHANGED / REPLACED.
+- **Safety:** no target or torch import; one strict RECORD resolver and one strict staging resolver; allowlisted, sanitized metadata; `direct_url.json` never archived.
+- **Importer:** validates semantics against a literal schema and writes immutable evidence (EVIDENCE_CONFLICT). It grants VERSION-SPECIFIC only to a validated official Kaggle-kernel capture with human attestation.
+
+H23 stays HOST-UNKNOWN until a real capture is run and reviewed.
+*Reverse if:* never weaken; only tighten.
+
+### D015 — 2026-10-02 — H23 capture rev 3: the archive is untrusted
+- **Archive:** schema 3 carries full RECORD inventories and wheel manifests, so the importer recomputes fingerprints, completeness, change, RECORD/source ownership and wheel/install counters.
+- **Contradictions** are rejected (CAPTURE_CONTRADICTION), never downgraded. Promotion is derived from verified primitives only.
+- **Extraction** is dir-fd relative with O_NOFOLLOW, via staging and a same-directory rename (`tools/safe_fs.py`).
+- **Sanitizer:** one recursive implementation returning `(value, did_redact)`.
+- **`console_script`** is the only allowed outside-root RECORD category (declared entry point, scripts directory, regular file, matching hash); without it no CLI-bearing distribution could ever be complete.
+
+H23 remains HOST-UNKNOWN.
+*Reverse if:* never weaken.

@@ -70,6 +70,11 @@ logs/
 submission.zip
 *.zip
 
+# ---- H23 harness capture: raw evidence and third-party source stay external ($GEMMA4_HARNESS_ROOT) ----
+h23_capture/
+harness_evidence/
+# capture archives (h23_harness_capture_<UTC>.zip) are covered by *.zip below
+
 # ---- Secrets / env ----
 .env
 .env.*

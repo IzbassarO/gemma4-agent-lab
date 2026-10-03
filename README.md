@@ -38,6 +38,16 @@ uv run python -m tools.hash_submission artifacts/submissions/<id>               
 uv run python -m tools.package_official_control --dataset-root "$GEMMA4_DATASET_ROOT"  # E0: restore + validate + package the official sample
 ```
 
+### H23 harness capture (prepared, not yet run; see `docs/competition/H23_HARNESS_CAPTURE_PLAN.md`)
+
+```bash
+# 1. run notebooks/h23_harness_capture.ipynb on Kaggle (CPU, internet off, + metric/gemma-4-developer-agent-wheelhouse)
+# 2. import the downloaded archive as external evidence; only a hashes/versions summary lands in vendor_meta/h23_captures/
+uv run python -m tools.import_h23_capture h23_harness_capture_<UTC>_<STATE>.zip --harness-root ~/gemma4-harness-evidence \
+    --attest-notebook-version <N> --attest-wheelhouse-version <V>
+uv run python -m tools.build_h23_notebook --check   # notebook == tools/h23_capture_core.py
+```
+
 Builds go to `artifacts/submissions/<id>/` (gitignored) and are byte-identical for identical sources. Harness compatibility stays `CURRENT_HARNESS_COMPATIBILITY_UNKNOWN` until H23/H26 are resolved.
 
 All tools are deterministic (stdlib only, except PyYAML for the submission validator): a rerun gives byte-identical JSON. Every writing tool goes through `tools.common.guard_output`, which refuses any destination at or below the dataset root (symlinks and aliases included). Traversal never follows symlinks.
