@@ -92,6 +92,63 @@ def test_path_safety_and_ownership_precede_volatile_category(path):
         classify_record_rows(distribution, interpreter, raw)
 
 
+def _litellm_record(path):
+    info = "litellm-1.0.dist-info"
+    root = "/observed/python/lib/python3.12/site-packages"
+    distribution = {"name": "litellm", "version": "1.0", "installation_root": root,
+                    "dist_info": info, "console_scripts": []}
+    interpreter = {"python_version": [3, 12, 1], "scheme": "posix_prefix",
+                   "prefix": "/observed/python", "site_packages": [root],
+                   "scripts_directory": "/observed/python/bin", "executable": "/observed/python/bin/python"}
+    metadata = b"Metadata-Version: 2.1\nName: litellm\nVersion: 1.0\n\n"
+    data = b"observed dotfile\n"
+    stream = io.StringIO(newline="")
+    csv.writer(stream, lineterminator="\n").writerows([
+        (path, _record_hash(data), str(len(data))),
+        (info + "/METADATA", _record_hash(metadata), str(len(metadata))),
+        (info + "/RECORD", "", ""),
+    ])
+    return distribution, interpreter, stream.getvalue().encode()
+
+
+@pytest.mark.parametrize("path", ["litellm/proxy/.gitignore", "litellm/proxy/.coveragerc", "litellm/proxy/.foo"])
+def test_safe_dotfiles_are_owned_regular_record_rows(path):
+    classified = classify_record_rows(*_litellm_record(path))
+    assert {row.path: category for row, category in classified} == {
+        path: "owned_regular", "litellm-1.0.dist-info/METADATA": "owned_regular",
+        "litellm-1.0.dist-info/RECORD": "excluded_volatile",
+    }
+
+
+@pytest.mark.parametrize("path,code", [
+    ("litellm/proxy/.", "RECORD_PATH"),
+    ("litellm/proxy/..", "RECORD_PATH"),
+    ("litellm/../.gitignore", "RECORD_PATH"),
+    ("litellm/proxy/.gitignore/..", "RECORD_PATH"),
+    ("litellm/proxy/\x1f", "RECORD_PATH"),
+    (".", "RECORD_PATH"), ("..", "RECORD_PATH"), ("/", "RECORD_PATH"),
+    ("/litellm/proxy/.gitignore", "RECORD_PATH"),
+    ("litellm\\proxy\\.gitignore", "RECORD_PATH"),
+    ("litellm/proxy/.gitignore\x00", "RECORD_NUL"),
+    ("litellm/proxy/.gitignore\x7f", "RECORD_PATH"),
+    ("litellm//.gitignore", "RECORD_PATH"),
+    ("litellm/proxy/", "RECORD_PATH"), ("", "RECORD_PATH"),
+])
+def test_dotfile_support_preserves_record_path_rejections(path, code):
+    with pytest.raises(PolicyError) as caught:
+        classify_record_rows(*_litellm_record(path))
+    assert caught.value.code == code
+
+
+@pytest.mark.parametrize("path", [
+    ".litellm/proxy/.gitignore", "litellm_sibling/proxy/.gitignore", "other_package/proxy/.gitignore",
+])
+def test_dotfiles_still_require_exact_distribution_ownership(path):
+    with pytest.raises(PolicyError) as caught:
+        classify_record_rows(*_litellm_record(path))
+    assert caught.value.code == "RECORD_OWNERSHIP"
+
+
 @pytest.mark.parametrize("extra", [
     {"swegemma/__init__.PY": b"collision"},
     {"swegemma/a": b"file", "swegemma/a.b": b"intermediate-sorting", "swegemma/a/b.py": b"nested"},

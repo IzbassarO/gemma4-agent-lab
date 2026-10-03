@@ -23,7 +23,7 @@ OWNED_PREFIXES = {
 }
 HARNESS_DISTRIBUTIONS = frozenset(("swegemma", "adk-submission", "adk-eval-core"))
 SOURCE_SUFFIXES = frozenset((".py", ".pyi", ".json", ".yaml", ".yml", ".toml", ".txt", ".md", ".cfg", ".ini", ".typed", ".j2", ".jinja"))
-_COMPONENT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+-]*\Z")
+_COMPONENT = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_.+-]*\Z")
 _HASH = re.compile(r"sha256=([A-Za-z0-9_-]{43})\Z")
 _DECIMAL = re.compile(r"(?:0|[1-9][0-9]{0,9})\Z")
 
