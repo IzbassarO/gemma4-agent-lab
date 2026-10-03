@@ -49,7 +49,9 @@ Bootstrap was attempted: `executed=true`, recipe `OFFICIAL_NOTEBOOK_CELL_2`,
 **diagnostic EXIT_NONZERO**, **return_code 1**. Stderr is a commitment only:
 138 bytes, SHA256
 `d09a5adf82acde0b9028eb81982601dc8507bb114685cf1f114804808e51364b`.
-The archive does not contain the stderr text, so its exact error is not yet confirmed.
+The canonical archive does not contain stderr text. The separate diagnostic
+follow-up below reproduces the exact committed byte count/hash and confirms
+the error without changing the canonical capture or its human attestation.
 
 Observed interactive runtime: **Python 3.13.15**, executable `/usr/bin/python3`,
 scheme `posix_local`, prefix `/usr`, site root
@@ -75,9 +77,63 @@ among others: `adk-eval-core 0.1.0`, `adk-submission 0.2.12`,
 `google-adk 1.36.1`, `google-genai 2.11.0`, `swegemma 0.2.7`,
 `transformers 5.13.1`, `vllm 0.19.1`.
 
-Several reported filenames have `cp312-cp312` tags while the observed
-interpreter is Python 3.13.15. This is a **strong diagnostic lead**, not a
-confirmed bootstrap root cause until reproduced or otherwise confirmed.
+The diagnostic follow-up confirms that nine reported `cp312-cp312` wheels
+are incompatible with the observed interactive Python 3.13.15 runtime.
+
+## Confirmed bootstrap failure — diagnostic follow-up
+
+Authority: **OWN-KAGGLE-RUN**, operator-reviewed evidence from a later saved
+[diagnostic notebook version, scriptVersionId 354984204](https://www.kaggle.com/code/izbassaro/notebooka2687d8703?scriptVersionId=354984204).
+This version was used only to reproduce and diagnose the bootstrap failure.
+The **canonical H23 capture remains scriptVersionId 354974356**, with the same
+capture SHA, receipt SHA, CAPTURE_VALIDATED result and operator-reported
+CONFIRMED durability.
+The existing human attestation remains unchanged; this follow-up is not a new
+imported or promoted capture.
+
+The diagnostic runtime was **Python 3.13.15**, executable `/usr/bin/python3`,
+with `metric/gemma-4-developer-agent-wheelhouse` **version 28**. Its
+`packaging.tags` compatibility scan found **exactly nine incompatible wheels**,
+all `cp312/cp312` binary wheels:
+
+```text
+apache_tvm_ffi-0.1.13.post3-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
+cbor2-6.1.4-cp312-cp312-manylinux_2_28_x86_64.whl
+ijson-3.5.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+msgspec-0.21.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+nvidia_cudnn_frontend-1.18.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+outlines_core-0.2.11-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+pybase64-1.5.0-cp312-cp312-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl
+setproctitle-1.3.7-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
+xgrammar-0.2.5.post1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+```
+
+The operator directly reproduced pip's rejection with this diagnostic dry-run:
+
+```bash
+/usr/bin/python3 -m pip install --dry-run -q --no-deps --force-reinstall \
+/kaggle/input/datasets/metric/gemma-4-developer-agent-wheelhouse/apache_tvm_ffi-0.1.13.post3-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
+```
+
+**RETURN_CODE = 1.** Exact stderr:
+
+```text
+ERROR: apache_tvm_ffi-0.1.13.post3-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl is not a supported wheel on this platform.
+```
+
+Stdout: **0 bytes**, SHA256
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+Stderr, including its final newline: **138 bytes**, SHA256
+`d09a5adf82acde0b9028eb81982601dc8507bb114685cf1f114804808e51364b`.
+The stderr byte count and SHA **exactly match** the commitment in the canonical
+Version 3 capture.
+
+**Confirmed root cause of the canonical OFFICIAL_NOTEBOOK_CELL_2 EXIT_NONZERO:**
+the observed interactive runtime was CPython 3.13.15, the all-wheel bootstrap
+included `apache_tvm_ffi` built specifically for cp312, and pip rejected that
+wheel as unsupported. This is no longer merely a diagnostic lead. It does not
+establish that later installation steps would succeed, identify hidden scorer
+Python, or prove successful installation of the official evaluation stack.
 
 ## Limitations and next blocker
 
@@ -93,7 +149,8 @@ verify omitted wheel/file bytes, establish exhaustive installation, or certify
 runtime functionality. The human ledger records the operator's review;
 its checker validates format only and does not promote H23 or scorer identity.
 
-**Step 0 is not complete.** Next: determine the exact bootstrap failure and
-obtain a usable harness/compiler environment for CPU certification. This
+**Step 0 is not complete.** The remaining blocker is obtaining a compatible,
+usable harness/compiler environment, successfully bootstrapping the required
+stack and verifying installed-package identity before CPU certification. This
 documentation checkpoint changes no agent/runtime code and launches no
 Kaggle, model/GPU or H26 experiment.

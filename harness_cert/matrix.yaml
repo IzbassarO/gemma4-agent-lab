@@ -411,8 +411,14 @@ items:
       is not established. Interactive runtime observations do not identify the hidden scorer, which remains
       SCORER_ONLY_UNKNOWN; H23 stays HOST-UNKNOWN. Curated report:
       harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md; operator ledger:
-      harness_cert/attestations/h23_kaggle_2026-10-03.json. Next blocker: confirm the exact bootstrap failure
-      and obtain a usable harness/compiler environment for CPU certification; Step 0 is not complete.
+      harness_cert/attestations/h23_kaggle_2026-10-03.json. Separate diagnostic follow-up scriptVersionId
+      354984204 confirms the canonical bootstrap failure: interactive CPython 3.13.15 rejected the cp312
+      apache_tvm_ffi wheel as unsupported; its reproduced stderr is 138 bytes with SHA256
+      d09a5adf82acde0b9028eb81982601dc8507bb114685cf1f114804808e51364b, exactly matching the canonical
+      capture commitment. The packaging.tags scan found nine incompatible cp312/cp312 wheels in v28.
+      This diagnostic version does not replace or promote the canonical capture (354974356) or change its ledger.
+      Next blocker: obtain a compatible, usable harness/compiler environment, successfully bootstrap and verify
+      the installed stack before CPU certification; Step 0 is not complete. Hidden scorer Python is unknown.
 
   - id: H24
     title: LoRA effective-output delta

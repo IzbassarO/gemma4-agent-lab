@@ -499,20 +499,22 @@ The next task is **not agent development**.
 
 The real **OWN-KAGGLE-RUN** checkpoint is [the 2026-10-03 H23 capture report](../../harness_cert/reports/H23_KAGGLE_CAPTURE_2026-10-03.md), with a separate [operator attestation](../../harness_cert/attestations/h23_kaggle_2026-10-03.json). Notebook `izbassaro/notebooka2687d8703` ran at visible Version 3 of 3, immutable `scriptVersionId=354974356`, with `metric/gemma-4-developer-agent-wheelhouse` v28 (41 visible files). Technical import returned `CAPTURE_VALIDATED`, durability `CONFIRMED`, and no warnings.
 
-The executed `OFFICIAL_NOTEBOOK_CELL_2` bootstrap returned `EXIT_NONZERO` (code 1). Successful Kaggle capture does not mean successful bootstrap. The observed Python 3.13.15 interactive runtime contained pre-existing `google-adk` 2.7.1, `google-genai` 2.12.1, `litellm` 1.85.7, and `transformers` 5.16.1 after that failure; these observations do not prove installation of the requested wheelhouse stack. Some reported wheelhouse files are cp312-specific: the difference from observed Python 3.13.15 is a strong diagnostic lead, not a confirmed root cause.
+The executed `OFFICIAL_NOTEBOOK_CELL_2` bootstrap returned `EXIT_NONZERO` (code 1). Successful Kaggle capture does not mean successful bootstrap. The observed Python 3.13.15 interactive runtime contained pre-existing `google-adk` 2.7.1, `google-genai` 2.12.1, `litellm` 1.85.7, and `transformers` 5.16.1 after that failure; these observations do not prove installation of the requested wheelhouse stack.
+
+The operator's later [diagnostic run, immutable `scriptVersionId=354984204`](https://www.kaggle.com/code/izbassaro/notebooka2687d8703?scriptVersionId=354984204), used Python 3.13.15 at `/usr/bin/python3` and wheelhouse v28. Its `packaging.tags` scan identified exactly nine incompatible `cp312-cp312` wheels. A direct pip dry-run rejected `apache_tvm_ffi-0.1.13.post3-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl` with `not a supported wheel on this platform` and return code 1. It produced zero stdout bytes and 138 stderr bytes; stderr SHA256 `d09a5adf82acde0b9028eb81982601dc8507bb114685cf1f114804808e51364b` exactly matches the canonical capture's stderr commitment. The interactive bootstrap failure is now **CONFIRMED** as the incompatibility between CPython 3.13 and the cp312 `apache_tvm_ffi` wheel. This follow-up diagnostic leaves the canonical Version 3 capture, receipt, technical result, and operator ledger unchanged; it does not establish installed stack identity or hidden scorer runtime.
 
 Interactive Kaggle runtime does not establish hidden scorer runtime. H23 stays **HOST-UNKNOWN**, and the hidden scorer stays **SCORER_ONLY_UNKNOWN**. The failed bootstrap prevents claiming successful reproduction of the official evaluation stack. **Step 0 is not complete.**
 
-The next blocker is determining the exact bootstrap failure and obtaining a usable harness/compiler environment for CPU certification.
+The next blocker is obtaining a compatible, usable harness/compiler environment, successfully bootstrapping and verifying the installed stack, then performing CPU certification.
 
 Target flow:
 
 ```text
-Validated real Kaggle capture + failed bootstrap evidence
+Validated real Kaggle capture + confirmed interactive wheel incompatibility
         ↓
-reproduce and confirm the exact bootstrap failure
+obtain a compatible, usable harness/compiler environment
         ↓
-obtain a usable harness/compiler environment
+successfully bootstrap the requested evaluation stack
         ↓
 verify installed stack identity and relevant source
         ↓
