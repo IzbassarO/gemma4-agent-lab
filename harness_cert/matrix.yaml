@@ -458,16 +458,28 @@ items:
     authority:
       - "OFFICIAL-HARNESS (README 2.2 says blocked)"
       - "OFFICIAL-HARNESS (dataset sample_submission/sub_agents/code_analyzer.yaml uses `!include ../prompts/analyzer.md` and `../configs/sampling.yaml`)"
+      - "REPRODUCED-LOCAL (Python 3.12.14; adk-submission 0.2.12, google-adk 1.36.1, google-genai 2.11.0; exact wheelhouse v28 compiler wheels)"
     local_possible: true
     requires_model: false
     requires_gpu: false
     requires_docker: false
-    blocked_by: [harness_source]
+    blocked_by: []
     risk: high
-    status: NOT-REPRODUCED
+    status: PASS
     result_path: harness_cert/results/H26/
-    minimal_repro: validate_directory + compile_submission on agents/baseline_v0_official and on variants with `../../x.md`, absolute path, and an escaping symlink.
-    notes: Two official sources contradict each other. Likely resolution - `..` resolved relative to the including file and allowed while staying inside the submission root - is INFERENCE until compiled.
+    minimal_repro: >-
+      validate_directory on the official baseline; load_yaml on include variants;
+      compile_submission on a no-LoRA baseline copy with explicit tool/model registries.
+      Accept the official parent include; reject traversal, absolute external and symlink escapes.
+    notes: >-
+      REPRODUCED-LOCAL PASS; curated evidence: harness_cert/reports/H26_INCLUDE_PATHS_2026-10-03.md.
+      validate_directory PASS confirms baseline structure, not YAML include resolution.
+      load_yaml/compiler permit ../ in !include when resolution relative to the containing YAML remains
+      inside submission root. The official parent include compiles as LlmAgent / swe_baseline_agent.
+      load_yaml rejects all three escape cases with PathTraversalError; compile_submission rejects traversal
+      and absolute external escapes with PathTraversalError, and symlinks during its earlier directory scan
+      with SubmissionValidationError. This does not generalize the separate config_path policy or identify
+      the hidden scorer, which remains SCORER_ONLY_UNKNOWN.
 
   - id: H27
     title: no-LoRA empty-adapter configuration

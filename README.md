@@ -55,9 +55,12 @@ installation promotion. The [2026-10-03 real Kaggle Version 3 capture](harness_c
 `CONFIRMED` durability and no warnings. Bootstrap returned `EXIT_NONZERO`
 (code 1), so successful capture does not establish successful bootstrap or
 reproduction of the official evaluation stack. H23 remains **HOST-UNKNOWN**;
-the hidden scorer remains **SCORER_ONLY_UNKNOWN**. Step 0 is incomplete: the
-next blocker is confirming the bootstrap failure and obtaining a usable
-harness/compiler environment for CPU certification.
+the hidden scorer remains **SCORER_ONLY_UNKNOWN**. The bootstrap cause is
+confirmed: the interactive CPython 3.13.15 runtime rejected the cp312
+`apache_tvm_ffi` wheel. The local Python 3.12.14 compiler subset is now verified
+and [H26 include-path checks](harness_cert/reports/H26_INCLUDE_PATHS_2026-10-03.md)
+are **PASS**. Step 0 remains incomplete pending acquisition and verification
+of the remaining CPU harness subset and its scripted-mock certification checks.
 
 ```bash
 python -m tools.build_h23_v4_notebook --check   # exact reviewed source embedding, no execution

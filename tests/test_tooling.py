@@ -176,9 +176,13 @@ def test_matrix_is_complete_and_honest():
     for i in items:
         assert MATRIX_FIELDS <= set(i), i["id"]
         assert i["status"] in allowed
-        assert i["status"] != "PASS", f"{i['id']}: nothing is runtime-certified yet"
         for flag in ("local_possible", "requires_model", "requires_gpu", "requires_docker"):
             assert isinstance(i[flag], bool), (i["id"], flag)
+    assert {i["id"] for i in items if i["status"] == "PASS"} == {"H26"}
+    h26 = next(i for i in items if i["id"] == "H26")
+    assert h26["blocked_by"] == []
+    assert any(authority.startswith("REPRODUCED-LOCAL") for authority in h26["authority"])
+    assert (REPO / "harness_cert/reports/H26_INCLUDE_PATHS_2026-10-03.md").is_file()
     assert {i["id"] for i in items if i["status"] == "DEFERRED"} == {"H16", "H24", "H25"}
 
 
