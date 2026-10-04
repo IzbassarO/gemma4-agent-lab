@@ -486,16 +486,31 @@ items:
     hypothesis: A bundle with no adapters/ directory and no `adapter:` keys starts the server and compiles cleanly.
     authority:
       - "COMMUNITY-EVIDENCE (C13 Sep 30 scorer failures)"
+      - "REPRODUCED-LOCAL (local discovery/compiler/argv component only; Python 3.12.14; adk-submission 0.2.12, google-adk 1.36.1, google-genai 2.11.0; exact wheelhouse v28 source wheels)"
     local_possible: true
-    requires_model: false
-    requires_gpu: false
+    requires_model: true
+    requires_gpu: true
     requires_docker: false
-    blocked_by: [harness_source]
+    blocked_by: [vllm_server_start]
     risk: high
     status: NOT-REPRODUCED
     result_path: harness_cert/results/H27/
-    minimal_repro: discover_adapters() and compile on a no-adapter bundle; inspect the generated vLLM argv (no empty --lora-modules).
-    notes: Server-start half needs GPU.
+    minimal_repro: >-
+      Local component complete: discover_adapters() and compile a no-adapter bundle;
+      inspect VllmServer.build_cmd with both disabled and default-enabled LoRA plus an empty manifest.
+      Remaining full-hypothesis check: real vLLM process startup, model loading and GPU runtime certification.
+    notes: >-
+      LOCAL COMPONENT PASS; curated evidence: harness_cert/reports/H27_NO_LORA_LOCAL_2026-10-03.md.
+      The fixture has no adapters/ directory or adapter keys; discover_adapters returned an empty
+      AdapterManifest, and compile_submission produced LlmAgent / swe_baseline_agent.
+      VllmServer.build_cmd omitted --enable-lora, --lora-modules, --max-loras and --max-lora-rank
+      for both enable_lora=False and default enable_lora=True with the empty manifest.
+      Its LoRA block requires enable_lora AND non-empty modules_to_mount.
+      Local source/discovery/compile/argv checks are complete; full H27 remains NOT-REPRODUCED.
+      local_possible describes the completed CPU component; requires_model/requires_gpu describe the remaining full check.
+      Remaining blocker: real vLLM process startup, model loading and GPU runtime certification.
+      No server was started; this local result does not identify the hidden scorer,
+      which remains SCORER_ONLY_UNKNOWN.
 
   - id: H28
     title: current public-sample submission path
