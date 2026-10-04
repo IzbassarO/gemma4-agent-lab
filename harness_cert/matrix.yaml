@@ -81,32 +81,46 @@ items:
     hypothesis: A model call to a tool not declared on the calling agent raises ValueError in ADK _get_tool and ends the task.
     authority:
       - "COMMUNITY-EVIDENCE (C03)"
+      - "REPRODUCED-LOCAL (20261004T172725Z-wynp5tjr; swegemma 0.2.7, google-adk 1.36.1, adk-submission 0.2.12)"
+    scope: synthetic local harness only; no hidden scorer inference
     local_possible: true
     requires_model: false
     requires_gpu: false
     requires_docker: false
-    blocked_by: [harness_source]
+    blocked_by: []
     risk: critical
-    status: NOT-REPRODUCED
-    result_path: harness_cert/results/H04/
-    minimal_repro: Agent declares only run_command+submit_patch; scripted mock emits search_similar_code(...). Record exception class, whether the loop continues, and the final agent_patch.
-    notes: Pair with H13/H14 - does fallback patch extraction still run on this exception path (C04)?
+    status: PASS
+    result_path: harness_cert/results/H04/20261004T172725Z-wynp5tjr/
+    minimal_repro: Agent declares only submit_patch; scripted mock emits write_file(app.py, after marker), which exists in the standard registry but is undeclared and unadvertised on this agent.
+    notes: >-
+      ADK _get_tool raises builtins.ValueError; no second LLM turn or tool execution occurs.
+      Budget counters are 1 LLM / 0 tools. Workspace is unchanged; the outer runner exception
+      path bypasses fallback extraction and returns an empty patch plus Sandbox execution error.
+      PASS certifies the fatal behavior in this synthetic local harness, not successful task solving
+      or hidden scorer behavior. Curated report: harness_cert/reports/H04_H05_H18_LOCAL_CERTIFICATION_2026-10-04.md.
 
   - id: H05
     title: declared tool control
     hypothesis: 'The same call with the tool declared executes and returns {"status":"ok",...}.'
     authority:
       - "OFFICIAL-HARNESS (README section 6)"
+      - "REPRODUCED-LOCAL (20261004T172725Z-wynp5tjr; swegemma 0.2.7, google-adk 1.36.1, adk-submission 0.2.12)"
+    scope: synthetic local harness only; no hidden scorer inference
     local_possible: true
     requires_model: false
     requires_gpu: false
     requires_docker: false
-    blocked_by: [harness_source]
+    blocked_by: []
     risk: low
-    status: NOT-REPRODUCED
-    result_path: harness_cert/results/H05/
-    minimal_repro: Same as H04 with the tool declared.
-    notes: Control for H04/H18.
+    status: PASS
+    result_path: harness_cert/results/H05/20261004T172725Z-wynp5tjr/
+    minimal_repro: Agent declares write_file+submit_patch; scripted mock writes app.py before -> after, submits the patch, then returns final text.
+    notes: >-
+      Positive control passes with exactly 3 HTTP/LLM turns and 1 budget-counted tool call
+      (submit_patch is free). Both tools respond successfully; returned/submitted/workspace
+      patches are the same 134 bytes, SHA256 87fde9f7b36aaf02d72d6281d1fc6556a781de1ebe50b29307c5b75c41515f54.
+      Infrastructure is valid; no original or escaped exception. Scope is synthetic local harness
+      only, with no hidden scorer inference. Curated report: harness_cert/reports/H04_H05_H18_LOCAL_CERTIFICATION_2026-10-04.md.
 
   - id: H06
     title: read_file line-range serialization
@@ -309,16 +323,25 @@ items:
     hypothesis: Calling a tool that exists nowhere (e.g. `bash`) is fatal rather than an error message the model can recover from.
     authority:
       - "COMMUNITY-EVIDENCE (C03/C04)"
+      - "REPRODUCED-LOCAL (20261004T172725Z-wynp5tjr; swegemma 0.2.7, google-adk 1.36.1, adk-submission 0.2.12)"
+    scope: synthetic local harness only; no hidden scorer inference
     local_possible: true
     requires_model: false
     requires_gpu: false
     requires_docker: false
-    blocked_by: [harness_source]
+    blocked_by: []
     risk: critical
-    status: NOT-REPRODUCED
-    result_path: harness_cert/results/H18/
-    minimal_repro: Mock emits a call to `bash`; observe whether the session continues and whether a prior edit survives as agent_patch.
-    notes: Distinct from H04 (tool exists in registry but not on this agent).
+    status: PASS
+    result_path: harness_cert/results/H18/20261004T172725Z-wynp5tjr/
+    minimal_repro: Agent declares write_file+submit_patch; mock first edits app.py successfully, then requests bash(command="echo synthetic"), absent from both the agent and standard registry.
+    notes: >-
+      First edit succeeds; the second HTTP/LLM turn requests bash and ADK _get_tool raises
+      builtins.ValueError. There is no third turn or submit_patch. Counters are 2 LLM / 1 tool.
+      The prior edit survives physically at pre-cleanup observation (134-byte workspace diff),
+      but the fatal runner path bypasses submission/fallback extraction and returns a zero-byte
+      agent patch. Workspace persistence does not imply returned-patch persistence. PASS certifies
+      fatality and patch loss in this synthetic local harness, not recovery or hidden scorer behavior.
+      Curated report: harness_cert/reports/H04_H05_H18_LOCAL_CERTIFICATION_2026-10-04.md.
 
   - id: H19
     title: compaction + tool-output retention

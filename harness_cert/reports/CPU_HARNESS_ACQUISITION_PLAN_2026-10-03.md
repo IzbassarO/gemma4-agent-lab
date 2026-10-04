@@ -2,7 +2,7 @@
 
 Initial static inspection at HEAD `4e1658a2561d616a93a16c20d22da7fe201a685c` identified a **Python 3.12 Apple Silicon CPU installation candidate** for the unchanged compiler and scripted-mock harness. The compiler subset has now been successfully created and executed locally; H26 and H27's local discovery/compile/argv component are reproduced. Full scripted-mock harness acquisition and the remaining CPU certification checks are pending.
 
-Scoped acquisition: **compiler = three exact source wheels + 41 PyPI support packages; mock harness = all five source wheels + 82 PyPI support packages total**. These are an import-derived subset, not a dependency-complete installation of the official evaluation stack. The compiler subset is installed; the full harness subset remains proposed. Initial planning used ZIP/metadata inspection without installation or package execution. This documentation checkpoint records the operator's subsequent compiler execution evidence and closes H26; it changes no agent behavior and runs no Kaggle/model/GPU workload.
+Scoped acquisition: **compiler = three exact source wheels + 41 PyPI support packages; mock harness = all five source wheels + 83 PyPI support packages total**. These are an import-derived subset, not a dependency-complete installation of the official evaluation stack. The compiler subset is installed; the full harness subset remains proposed. Initial planning used ZIP/metadata inspection without installation or package execution. This documentation checkpoint records the operator's subsequent compiler execution evidence and closes H26; it changes no agent behavior and runs no Kaggle/model/GPU workload.
 
 ## Reproduced compiler checkpoint
 
@@ -49,6 +49,12 @@ Do not install vLLM, torch, torchvision, Transformers, PEFT, accelerate, safeten
 **Must come from the supplied v28 wheelhouse:** the five source archives above, byte-for-byte. Compiler-only acquisition uses the first three; the harness adds eval-core and SWEGemma. **May come from PyPI:** all support pins below. They are proposed local support versions, not evidence of hidden-scorer versions.
 
 `litellm==1.83.14` is chosen within Google ADK 1.36.1's declared extensions range `>=1.83.7,<=1.83.14`, without installing that extra. Its base dependencies include exact pins for OpenAI, tokenizers, tiktoken, fastuuid, HTTP libraries and Pydantic, but no torch/Transformers/vLLM. This is a different, explicitly pinned local support choice from the canonical capture's pre-existing LiteLLM 1.85.7. [Primary LiteLLM metadata](https://pypi.org/pypi/litellm/1.83.14/json).
+
+The local support closure now adds **Authlib 1.6.6** after an import failure before H05 execution. The exact v28 `google_adk-1.36.1.dist-info/METADATA:23` declares **`Requires-Dist: authlib>=1.6.6,<2`**, without an extra or conditional marker; `google/adk/auth/oauth2_credential_util.py:21–22` imports `OAuth2Session` and `OAuth2Token` unconditionally. The original 82-package subset omitted this base dependency. Authlib 1.6.6 satisfies the wheel's lower bound and requires only `cryptography`; its Requests integration also imports the already pinned `requests`. Existing `cryptography==50.0.2`, `cffi==2.1.1`, `pycparser==3.0` and Requests closure stay unchanged. There are no additional transitive packages or model/GPU/cloud-service dependencies. [Authlib 1.6.6 metadata](https://pypi.org/pypi/Authlib/1.6.6/json).
+
+The reviewed Authlib wheel is `authlib-1.6.6-py2.py3-none-any.whl`, SHA256 `7d9e9bc535c13974313a87f53e8430eb6ea3d1cf6ae4f6efcd793f2e949143fd`. ZIP inspection confirms `Requires-Python: >=3.9`, `Requires-Dist: cryptography` and the `py3-none-any` tag, compatible with Apple Silicon Python 3.12.14. Keep 1.6.6 for this local offline certification experiment. The correction changes only the proposed harness support pins; operator installation and the AutoFlow construction smoke below remain pending. This smoke imports the OAuth utility and constructs `AutoFlow`, reaching `SingleFlow`'s authentication preprocessor path without inference or OAuth requests. It does not establish H05 behavior, a complete ADK installation, or hidden-scorer package state.
+
+Metadata-only, binary-only `uv pip compile` for `aarch64-apple-darwin` / Python **3.12.14** resolved the corrected **83-package** support lock. Comparison with the operator's existing 82-package lock confirmed that only `authlib==1.6.6` was added and every existing version was preserved. The verified wheel, regenerated `harness.in` / `harness.lock`, and one-package `authlib.lock` are gitignored local artifacts under `artifacts/harness_support/authlib166/`; no package was installed or imported during this check. See the [probe README](../../tools/harness_cert/README.md) for fresh-checkout wheel acquisition, hash-lock creation, incremental operator installation and AutoFlow smoke commands. Those commands install only Authlib with `--no-deps`, using the verified wheel/hash; they do not resolve the full Google ADK requirements.
 
 During initial planning, `uv 0.12.19` performed metadata-only resolution with `--python-version 3.12 --python-platform aarch64-apple-darwin --only-binary :all: --no-python-downloads`. The selected dependencies were constrained by all five source wheels' base version bounds. Both the 41-package compiler and 82-package harness support sets resolved successfully; neither contains a model engine. That planning pass excluded installation/build/import operations. Python 3.12 was not present then; it has since been acquired as Python 3.12.14 and the compiler subset successfully installed and exercised, as recorded above.
 
@@ -101,7 +107,7 @@ websockets==15.0.1
 zipp==4.1.1
 ```
 
-Harness additions; combine with compiler pins for the full 82-package support set:
+Harness additions; combine with compiler pins for the corrected 83-package support set:
 
 <!-- harness-extra-pins -->
 ```text
@@ -109,6 +115,7 @@ aiohappyeyeballs==2.7.1
 aiohttp==3.13.4
 aiosignal==1.4.0
 attrs==26.1.0
+authlib==1.6.6
 cachetools==7.2.0
 click==8.1.8
 docker==7.2.0
@@ -201,6 +208,8 @@ uv pip install --python "$H23_CPU_TMP/harness/bin/python" --no-deps --no-index \
 export LITELLM_LOCAL_MODEL_COST_MAP=True
 export LITELLM_MODE=PRODUCTION
 export HF_HUB_OFFLINE=1
+export PYTHON_DOTENV_DISABLED=1
+"$H23_CPU_TMP/harness/bin/python" -I -B -c 'from importlib.metadata import version; assert version("google-adk") == "1.36.1"; assert version("authlib") == "1.6.6"; import google.adk.auth.oauth2_credential_util; from google.adk.flows.llm_flows.auto_flow import AutoFlow; AutoFlow(); print("AUTHLIB_IMPORT_OK")'
 "$H23_CPU_TMP/harness/bin/python" -c 'from swegemma.harness.agent_runner import build_agent_prompt; from swegemma.sandbox import SubprocessManager; print("HARNESS_IMPORT_OK")'
 ```
 
