@@ -21,6 +21,7 @@ from types import CodeType, FrameType
 
 BASELINE = "ea5b857487ae9e146e94a88e108962742fcbdef8"
 BUDGET_BASELINE = "12c319fa8bcf5b313175f80cee3ce06a77a59619"
+GRAPH_BASELINE = "81ac5b150c719cafc671b884dce7f525219e4ea0"
 NULL_SINK = Path("/dev/null")
 # Freeze the loaded stdlib code identities before optional dependencies import.
 _DEVNULL_CODE = subprocess.Popen._get_devnull.__code__
@@ -48,6 +49,15 @@ BUDGET_PROBE_FILES = frozenset({
     "tests/test_harness_budget_admission.py",
     "tests/test_synthetic_verification.py",
     "tests/test_harness_loopback.py",
+})
+# H30 records prompt/schema observations at its own exact reviewed baseline.
+# It changes neither historical admission profile nor runtime guard policy.
+GRAPH_PROBE_FILES = frozenset({
+    "tools/harness_cert/_probe_safety.py",
+    "tools/harness_cert/run_h30.py",
+    "tools/harness_cert/README.md",
+    "tools/harness_cert/H30_DESIGN.md",
+    "tests/test_harness_graph_probe.py",
 })
 # The support-pin correction is the sole admitted tracked documentation change.
 # Unlike probe sources, its entire reviewed content must match this digest.
@@ -197,6 +207,9 @@ def check_repository(repo: Path, *, profile: str = "dispatch") -> list[str]:
         support_documents = REVIEWED_SUPPORT_DOCUMENTS
     elif profile == "budget":
         baseline, probe_files = BUDGET_BASELINE, BUDGET_PROBE_FILES
+        support_documents = {}
+    elif profile == "graph":
+        baseline, probe_files = GRAPH_BASELINE, GRAPH_PROBE_FILES
         support_documents = {}
     else:
         raise ProbeRefused(f"unknown repository admission profile: {profile!r}")

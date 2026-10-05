@@ -6,6 +6,23 @@ repository. It changes no production agent and makes no hidden-scorer claim.
 Run the certification experiment yourself; unit tests use fakes and do not run
 the installed harness.
 
+The H30 observation gate is specified in [H30_DESIGN.md](H30_DESIGN.md). Its
+separate graph profile pins `81ac5b150c719cafc671b884dce7f525219e4ea0`; both older
+profiles retain their historical pins. From the repository root:
+
+```sh
+H23_CPU_TMP=/private/tmp/h23-cpu.UA1C8T \
+  /private/tmp/h23-cpu.UA1C8T/harness/bin/python -B -m tools.harness_cert.run_h30
+```
+
+This captures actual official-runner ADK/LiteLLM requests through an in-process
+HTTP transport, with no listener or network connection. Six synthetic controls
+distinguish recognized file presence/size from agent tool declarations. Graph
+fixtures are stat-only; no graph-tool functionality or real model is tested.
+Raw evidence remains under the ignored H30 results directory. No prediction
+flag promotes the matrix. Separate package/import readiness cannot certify the
+current Kaggle submission wrapper or hidden scorer.
+
 The next tranche is documented in [H13_H14_H29_DESIGN.md](H13_H14_H29_DESIGN.md).
 Its separate fixed baseline is `12c319fa8bcf5b313175f80cee3ce06a77a59619`.
 The historical dispatch probe below retains its original pin and refuses the
