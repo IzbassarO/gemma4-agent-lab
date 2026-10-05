@@ -1,4 +1,4 @@
-"""Fail-closed admission for the synthetic H04/H05/H18 probe.
+"""Fail-closed admission for the synthetic harness probes.
 
 The parent audit hook is not an OS firewall and is not inherited by subprocesses.
 Only the separate, exact sandbox-command allowlist admits subprocess task work.
@@ -20,6 +20,7 @@ from pathlib import Path
 from types import CodeType, FrameType
 
 BASELINE = "ea5b857487ae9e146e94a88e108962742fcbdef8"
+BUDGET_BASELINE = "12c319fa8bcf5b313175f80cee3ce06a77a59619"
 NULL_SINK = Path("/dev/null")
 # Freeze the loaded stdlib code identities before optional dependencies import.
 _DEVNULL_CODE = subprocess.Popen._get_devnull.__code__
@@ -33,6 +34,20 @@ PROBE_FILES = frozenset({
     "tools/harness_cert/README.md",
     "tests/test_harness_loopback.py",
     "tests/test_harness_probe.py",
+})
+# The next tranche has its own reviewed HEAD and exact change surface. The
+# historical dispatch probe deliberately retains its original baseline pin.
+BUDGET_PROBE_FILES = frozenset({
+    "tools/harness_cert/_probe_safety.py",
+    "tools/harness_cert/_scripted_loopback.py",
+    "tools/harness_cert/run_h13_h14_h29.py",
+    "tools/harness_cert/_synthetic_verification.py",
+    "tools/harness_cert/README.md",
+    "tools/harness_cert/H13_H14_H29_DESIGN.md",
+    "tests/test_harness_budget_probe.py",
+    "tests/test_harness_budget_admission.py",
+    "tests/test_synthetic_verification.py",
+    "tests/test_harness_loopback.py",
 })
 # The support-pin correction is the sole admitted tracked documentation change.
 # Unlike probe sources, its entire reviewed content must match this digest.
@@ -176,11 +191,19 @@ def git(repo: Path, *args: str) -> str:
     ).stdout.decode("utf-8", errors="strict")
 
 
-def check_repository(repo: Path) -> list[str]:
+def check_repository(repo: Path, *, profile: str = "dispatch") -> list[str]:
+    if profile == "dispatch":
+        baseline, probe_files = BASELINE, PROBE_FILES
+        support_documents = REVIEWED_SUPPORT_DOCUMENTS
+    elif profile == "budget":
+        baseline, probe_files = BUDGET_BASELINE, BUDGET_PROBE_FILES
+        support_documents = {}
+    else:
+        raise ProbeRefused(f"unknown repository admission profile: {profile!r}")
     if Path(git(repo, "rev-parse", "--show-toplevel").strip()).resolve() != repo.resolve():
         raise ProbeRefused(f"not the repository root: {repo}")
-    if git(repo, "rev-parse", "HEAD").strip() != BASELINE:
-        raise ProbeRefused(f"HEAD must equal reviewed baseline {BASELINE}")
+    if git(repo, "rev-parse", "HEAD").strip() != baseline:
+        raise ProbeRefused(f"HEAD must equal reviewed baseline {baseline}")
     records = git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all").split("\0")
     changes = []
     for record in records:
@@ -189,17 +212,17 @@ def check_repository(repo: Path) -> list[str]:
         if len(record) < 4 or record[:2] not in {"??", " M", "M ", "MM", "A ", "AM"}:
             raise ProbeRefused(f"unreviewed Git change: {record!r}")
         path = record[3:]
-        if path in REVIEWED_SUPPORT_DOCUMENTS:
+        if path in support_documents:
             document = repo / path
             if record[:2] not in {" M", "M ", "MM"}:
                 raise ProbeRefused(f"support document must be a tracked modification: {path}")
             if (not stat.S_ISREG(document.lstat().st_mode)
                     or document.resolve() != document.absolute()
-                    or hashlib.sha256(document.read_bytes()).hexdigest() != REVIEWED_SUPPORT_DOCUMENTS[path]):
+                    or hashlib.sha256(document.read_bytes()).hexdigest() != support_documents[path]):
                 raise ProbeRefused(f"support document differs from reviewed pin correction: {path}")
             changes.append(path)
             continue
-        if path not in PROBE_FILES:
+        if path not in probe_files:
             raise ProbeRefused(f"repository is dirty outside the probe: {path}")
         changes.append(path)
     return changes

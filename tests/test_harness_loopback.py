@@ -6,6 +6,7 @@ import copy
 import io
 import json
 import sys
+import threading
 from email.message import Message
 from types import SimpleNamespace
 
@@ -141,6 +142,63 @@ def test_invalid_requests_fail_closed_without_consuming_the_script(in_memory_ser
         assert server.calls[0]["request"]["json"] == request
         assert server.calls[0]["request"]["body_complete"] is True
         assert server.calls[4]["request"]["body_complete"] is False
+
+
+def _pending_handler(server):
+    handler = object.__new__(server._server.handler)
+    handler.client_address = ("127.0.0.1", 31337)
+    handler.command, handler.path, handler.request_version = "POST", "/v1/chat/completions", "HTTP/1.1"
+    body = b'{"model":"local","messages":[]}'
+    handler.headers = Message()
+    handler.headers["Content-Length"] = str(len(body))
+    handler.rfile, handler.wfile = io.BytesIO(body), io.BytesIO()
+    return handler
+
+
+def test_withheld_request_is_recorded_before_release_and_never_sent(in_memory_server):
+    with ScriptedServer() as server:
+        server.set_script([{"role": "assistant", "content": "held"}])
+        server.withhold_response(1)
+        handler = _pending_handler(server)
+        worker = threading.Thread(target=handler._handle)
+        worker.start()
+        try:
+            assert server._held_admitted.wait(timeout=1)
+            assert server.calls[0]["script_number"] == 1
+            assert server.calls[0]["request"]["body_complete"]
+            assert server.calls[0]["response"]["delivery"] == "withheld"
+            assert handler.wfile.getvalue() == b""
+            with pytest.raises(RuntimeError, match="has not finished"):
+                server.set_script([])
+            assert server.release_withheld_response()
+        finally:
+            server.release_withheld_response()
+            worker.join(timeout=1)
+        assert not worker.is_alive()
+        assert server.calls[0]["response"]["delivery"] == "discarded_after_release"
+        assert handler.wfile.getvalue() == b""
+        assert handler.close_connection
+        server.set_script([{"role": "assistant", "content": "normal"}])
+        assert _request(server, {"model": "local", "messages": []})[0] == 200
+        assert server.calls[-1]["response"]["delivery"] == "sent"
+
+
+def test_withheld_response_wait_is_bounded_and_recorded_as_failure(in_memory_server):
+    with ScriptedServer() as server:
+        server.set_script([{"role": "assistant", "content": "held"}])
+        server.withhold_response(1, max_wait=0.001)
+        handler = _pending_handler(server)
+        handler._handle()
+        assert server.calls[0]["response"]["delivery"] == "hold_bound_expired"
+        assert handler.wfile.getvalue() == b""
+
+
+@pytest.mark.parametrize("number,wait", [(0, 1), (2, 1), (True, 1), (1, 0), (1, 9), (1, float("nan"))])
+def test_withholding_refuses_unknown_response_or_unbounded_wait(number, wait):
+    server = ScriptedServer()
+    server.set_script([{"role": "assistant", "content": "held"}])
+    with pytest.raises(ValueError):
+        server.withhold_response(number, max_wait=wait)
 
 
 @pytest.mark.parametrize("peer", [

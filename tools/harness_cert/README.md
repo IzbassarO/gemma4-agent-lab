@@ -6,6 +6,43 @@ repository. It changes no production agent and makes no hidden-scorer claim.
 Run the certification experiment yourself; unit tests use fakes and do not run
 the installed harness.
 
+The next tranche is documented in [H13_H14_H29_DESIGN.md](H13_H14_H29_DESIGN.md).
+Its separate fixed baseline is `12c319fa8bcf5b313175f80cee3ce06a77a59619`.
+The historical dispatch probe below retains its original pin and refuses the
+new HEAD. From this repository root, the operator runs the next tranche with:
+
+```sh
+H23_CPU_TMP=/private/tmp/h23-cpu.UA1C8T \
+  /private/tmp/h23-cpu.UA1C8T/harness/bin/python -B -m tools.harness_cert.run_h13_h14_h29
+```
+
+This runs a submission/verification control, H13, H14, H29, then an H29 final-text
+boundary control. The control uses official `verify_task` twice: the unchanged
+synthetic baseline must fail and the submitted patch must pass. H13/H14 also
+verify their returned fallback patches in fresh isolated sandboxes. Evaluator
+task hydration is never called. H13 deliberately withholds the second HTTP
+response while the real session timer runs; it does not certify cancellation
+during a synchronous tool.
+
+The exact pure Python pytest support closure already present in `.venv` is
+staged before the audit hook, hash-checked, and copied only to synthetic
+verification venvs. There is no package installation, host `.pth`, general
+site-packages access, wheel discovery or `system_site_packages=True`.
+Inherited pytest options/plugins are cleared and plugin autoload is disabled.
+A changed closure refuses preflight rather than silently accepting new code.
+
+All cases share one run ID. Primary evidence goes under
+`harness_cert/results/{H13,H14,H29}/<run-id>/`; controls are under
+`H13/<run-id>/CONTROL/` and `H29/<run-id>/H29_BOUNDARY/`. Each preserves
+preflight, script, HTTP, trace, exceptions, returned/submitted/workspace patches,
+workspace content, verification/JUnit evidence where exercised, and an artifact
+SHA256 inventory. `prediction_matches` checks the source-derived design; it is
+separate from `infrastructure_ok` and never promotes the matrix.
+
+Do not change matrix/report evidence before reconstructing a valid operator run.
+Synthetic local results establish no Kaggle hidden-scorer behavior. No H04/H05/H18
+certification run is repeated by this command.
+
 From the repository root, using the already acquired environment:
 
 ```sh

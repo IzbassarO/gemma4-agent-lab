@@ -178,7 +178,9 @@ def test_matrix_is_complete_and_honest():
         assert i["status"] in allowed
         for flag in ("local_possible", "requires_model", "requires_gpu", "requires_docker"):
             assert isinstance(i[flag], bool), (i["id"], flag)
-    assert {i["id"] for i in items if i["status"] == "PASS"} == {"H04", "H05", "H18", "H26"}
+    assert {i["id"] for i in items if i["status"] == "PASS"} == {
+        "H04", "H05", "H13", "H14", "H18", "H26", "H29",
+    }
     for case in ("H04", "H05", "H18"):
         item = next(i for i in items if i["id"] == case)
         assert item["blocked_by"] == []
@@ -187,6 +189,18 @@ def test_matrix_is_complete_and_honest():
         assert item["result_path"] == f"harness_cert/results/{case}/20261004T172725Z-wynp5tjr/"
         assert "H04_H05_H18_LOCAL_CERTIFICATION_2026-10-04.md" in item["notes"]
     assert (REPO / "harness_cert/reports/H04_H05_H18_LOCAL_CERTIFICATION_2026-10-04.md").is_file()
+    budget_report = "H13_H14_H29_LOCAL_CERTIFICATION_2026-10-05.md"
+    for case in ("H13", "H14", "H29"):
+        item = next(i for i in items if i["id"] == case)
+        assert item["blocked_by"] == []
+        assert (
+            "REPRODUCED-LOCAL (20261005T003205Z-_fgsypg5; swegemma 0.2.7, "
+            "google-adk 1.36.1, adk-submission 0.2.12)"
+        ) in item["authority"]
+        assert item["scope"] == "synthetic local harness only; no hidden scorer inference"
+        assert item["result_path"] == f"harness_cert/results/{case}/20261005T003205Z-_fgsypg5/"
+        assert f"harness_cert/reports/{budget_report}" in item["notes"]
+    assert (REPO / "harness_cert/reports" / budget_report).is_file()
     h26 = next(i for i in items if i["id"] == "H26")
     assert h26["blocked_by"] == []
     assert any(authority.startswith("REPRODUCED-LOCAL") for authority in h26["authority"])

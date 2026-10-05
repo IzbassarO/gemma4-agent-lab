@@ -240,32 +240,53 @@ items:
     hypothesis: When max_time expires without submit_patch, fallback extraction preserves the working-tree diff and it is verified.
     authority:
       - "OFFICIAL-HARNESS (README section 8.1)"
+      - "REPRODUCED-LOCAL (20261005T003205Z-_fgsypg5; swegemma 0.2.7, google-adk 1.36.1, adk-submission 0.2.12)"
+    scope: synthetic local harness only; no hidden scorer inference
     local_possible: true
     requires_model: false
     requires_gpu: false
     requires_docker: false
-    blocked_by: [harness_source]
+    blocked_by: []
     risk: high
-    status: NOT-REPRODUCED
-    result_path: harness_cert/results/H13/
-    minimal_repro: Mock edits a source file, then sleeps past max_time_minutes; check patches/<id>.patch and Phase 2 runs.
-    notes: Also test the timeout that fires mid-tool-call.
+    status: PASS
+    result_path: harness_cert/results/H13/20261005T003205Z-_fgsypg5/
+    minimal_repro: Scripted write_file edits app.py; withhold response to HTTP request 2 until the real 0.05-minute session deadline expires; audit inner timeout recovery, fallback diff and direct official Phase 2 verify_task.
+    notes: >-
+      Two admitted HTTP requests, one completed LLM event and one counted write precede
+      builtins.TimeoutError on the async model wait. No submit_patch or submitted state;
+      runner fallback executes once. Returned/workspace/expected patches are byte-identical
+      134 bytes, SHA256 87fde9f7b36aaf02d72d6281d1fc6556a781de1ebe50b29307c5b75c41515f54.
+      Official verification applies the returned patch and passes the immutable synthetic test;
+      the shared CONTROL baseline fails. Timeout during a synchronous tool body / mid-tool
+      cancellation remains unknown. Evaluator orchestration is source-read only.
+      Curated report: harness_cert/reports/H13_H14_H29_LOCAL_CERTIFICATION_2026-10-05.md.
 
   - id: H14
     title: tool-budget patch recovery
     hypothesis: Exhausting max_tool_calls without submit_patch still yields a verified fallback patch.
     authority:
       - "OFFICIAL-HARNESS (README section 8.1)"
+      - "REPRODUCED-LOCAL (20261005T003205Z-_fgsypg5; swegemma 0.2.7, google-adk 1.36.1, adk-submission 0.2.12)"
+    scope: synthetic local harness only; no hidden scorer inference
     local_possible: true
     requires_model: false
     requires_gpu: false
     requires_docker: false
-    blocked_by: [harness_source]
+    blocked_by: []
     risk: high
-    status: NOT-REPRODUCED
-    result_path: harness_cert/results/H14/
-    minimal_repro: max_tool_calls=3; mock edits on call 1 then spends calls 2-4; check patch preserved.
-    notes: Record what the budget-exceeded tool response looks like to the model.
+    status: PASS
+    result_path: harness_cert/results/H14/20261005T003205Z-_fgsypg5/
+    minimal_repro: max_tool_calls=3; scripted mock writes the changed app.py three times, attempts a reverting fourth write, then returns final text; audit rejection, fallback and direct official Phase 2 verify_task.
+    notes: >-
+      Five HTTP/completed LLM events; four attempted writes, exactly three executed counted
+      bodies. Attempt 4 returns BudgetExceeded / Tool call budget exhausted (3 calls), never
+      executes the reverting body and leaves the counter at three. Request 5 contains the
+      rejection; final text precedes outer exhaustion termination. No submit_patch;
+      fallback executes once. Returned/workspace/expected patches are byte-identical 134 bytes,
+      SHA256 87fde9f7b36aaf02d72d6281d1fc6556a781de1ebe50b29307c5b75c41515f54.
+      Official verification applies the recovered patch and passes; shared CONTROL baseline
+      fails. Evaluator orchestration is source-read only.
+      Curated report: harness_cert/reports/H13_H14_H29_LOCAL_CERTIFICATION_2026-10-05.md.
 
   - id: H15
     title: compaction state retention
@@ -557,16 +578,28 @@ items:
     hypothesis: Both remain callable when tool_calls_used == max_tool_calls.
     authority:
       - "OFFICIAL-HARNESS (README 6.1, count_tool_call=False)"
+      - "REPRODUCED-LOCAL (20261005T003205Z-_fgsypg5; swegemma 0.2.7, google-adk 1.36.1, adk-submission 0.2.12)"
+    scope: synthetic local harness only; no hidden scorer inference
     local_possible: true
     requires_model: false
     requires_gpu: false
     requires_docker: false
-    blocked_by: [harness_source]
+    blocked_by: []
     risk: medium
-    status: NOT-REPRODUCED
-    result_path: harness_cert/results/H29/
-    minimal_repro: max_tool_calls=2; mock spends 2 calls then calls get_status and submit_patch.
-    notes: Does the session end at budget exhaustion before the model gets another turn? That decides whether "free" is reachable.
+    status: PASS
+    result_path: harness_cert/results/H29/20261005T003205Z-_fgsypg5/
+    minimal_repro: max_tool_calls=2; scripted mock writes twice, calls get_status at exhaustion, calls submit_patch, then returns final text within the ongoing ADK invocation.
+    notes: >-
+      Five HTTP/completed LLM events; two counted writes and two successful free tools.
+      get_status reports used=2, remaining=0; submit_patch succeeds with 134 bytes / one file.
+      Final counter remains two. Submitted/returned/workspace/expected patches are byte-identical,
+      SHA256 87fde9f7b36aaf02d72d6281d1fc6556a781de1ebe50b29307c5b75c41515f54;
+      no fallback or agent error. Supplementary H29_BOUNDARY ends the exhausted invocation
+      with final text, preventing a later invocation despite available free-call responses;
+      fallback still recovers its patch. Free calls remain subject to the time gate (source-read).
+      H29 parent inventory includes an earlier seeded boundary preflight; main-case artifacts
+      and the boundary's own final inventory match, as documented in the report.
+      Curated report: harness_cert/reports/H13_H14_H29_LOCAL_CERTIFICATION_2026-10-05.md.
 
   - id: H30
     title: graph-tool advertisement vs declared tools

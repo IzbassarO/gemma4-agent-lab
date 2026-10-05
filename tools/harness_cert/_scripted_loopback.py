@@ -159,6 +159,11 @@ class ScriptedServer:
         self._lock = threading.Lock()
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
+        self._held_number: int | None = None
+        self._held_wait = 8.0
+        self._held_admitted = threading.Event()
+        self._held_release = threading.Event()
+        self._held_done = threading.Event()
 
     @property
     def origin(self) -> str:
@@ -171,6 +176,8 @@ class ScriptedServer:
         return self.origin + "/v1"
 
     def set_script(self, messages: list[dict[str, Any]]) -> None:
+        if self._held_admitted.is_set() and not self._held_done.is_set():
+            raise RuntimeError("Previous withheld response has not finished")
         if not isinstance(messages, list):
             raise ValueError("Script must be a list of assistant messages")
         for message in messages:
@@ -183,6 +190,27 @@ class ScriptedServer:
         with self._lock:
             self._script = copy.deepcopy(messages)
             self._position = 0
+            self._held_number = None
+            self._held_admitted.clear()
+            self._held_release.clear()
+            self._held_done.clear()
+
+    def withhold_response(self, number: int, *, max_wait: float = 8.0) -> None:
+        """Record one request, withholding its response until operator release.
+
+        This finite synthetic delay tests the runner's actual async deadline.
+        The designated response is never sent, including after cancellation.
+        Other requests retain the existing immediate-response semantics.
+        """
+        if (type(number) is not int or not 1 <= number <= len(self._script)
+                or self._position != 0 or self._held_number is not None
+                or not math.isfinite(max_wait) or not 0 < max_wait <= 8.0):
+            raise ValueError("Withholding requires one unconsumed script response and a bounded wait")
+        self._held_number, self._held_wait = number, max_wait
+
+    def release_withheld_response(self) -> bool:
+        self._held_release.set()
+        return not self._held_admitted.is_set() or self._held_done.wait(timeout=1.0)
 
     def __enter__(self) -> ScriptedServer:
         if self._server is not None:
@@ -199,7 +227,7 @@ class ScriptedServer:
             def log_message(self, format: str, *args: Any) -> None:
                 pass
 
-            def _respond(self, status: int, payload: dict[str, Any], body: bytes = b"") -> None:
+            def _respond(self, status: int, payload: dict[str, Any], body: bytes = b"", *, script_number=None) -> None:
                 response_body = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode()
                 response_headers = [
                     ["Content-Type", "application/json"],
@@ -223,7 +251,9 @@ class ScriptedServer:
                         "body_text": response_body.decode("utf-8"),
                         "body_base64": base64.b64encode(response_body).decode("ascii"),
                         "json": payload,
+                        "delivery": "pending",
                     },
+                    "script_number": script_number,
                 }
                 try:
                     call["request"]["json"] = json.loads(body)
@@ -231,14 +261,23 @@ class ScriptedServer:
                     pass
                 with owner._lock:
                     owner.calls.append(call)
+                if script_number is not None and script_number == owner._held_number:
+                    call["response"]["delivery"] = "withheld"
+                    owner._held_admitted.set()
+                    released = owner._held_release.wait(timeout=owner._held_wait)
+                    call["response"]["delivery"] = "discarded_after_release" if released else "hold_bound_expired"
+                    self.close_connection = True
+                    owner._held_done.set()
+                    return
                 self.send_response_only(status)
                 for name, value in response_headers:
                     self.send_header(name, value)
                 self.end_headers()
                 try:
                     self.wfile.write(response_body)
-                except (BrokenPipeError, ConnectionResetError):
-                    pass
+                    call["response"]["delivery"] = "sent"
+                except (BrokenPipeError, ConnectionResetError) as exc:
+                    call["response"]["delivery"] = type(exc).__name__
                 self.close_connection = True
 
             def _error(self, status: int, message: str, body: bytes = b"") -> None:
@@ -295,7 +334,7 @@ class ScriptedServer:
                     }],
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
                 }
-                self._respond(200, payload, body)
+                self._respond(200, payload, body, script_number=number)
 
             do_POST = _handle
             do_GET = _handle
@@ -312,6 +351,7 @@ class ScriptedServer:
         return self
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        self.release_withheld_response()
         if self._server is not None:
             self._server.shutdown()
             self._server.server_close()
