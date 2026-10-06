@@ -561,17 +561,30 @@ items:
     hypothesis: The official sample packaged deterministically passes the current Kaggle submission path.
     authority:
       - "OFFICIAL-NOTEBOOK"
-      - "OWN-KAGGLE-RUN (none yet)"
+      - "OWN-KAGGLE-RUN (reviewed 2026-10-06; operator-reported E0 Succeeded, score 0.05; direct File Upload; ZIP SHA256 25d07b6484d3c4fb4683170ed85b7a3adfe2ff0c1962f7949e43bc3cf87e4fc3)"
+    scope: one frozen E0 artifact and operator-reported hosted completion; hidden runtime unknown
     local_possible: false
     requires_model: true
     requires_gpu: true
     requires_docker: false
-    blocked_by: [kaggle_submission]
+    blocked_by: []
     risk: medium
-    status: NOT-REPRODUCED
-    result_path: harness_cert/results/H28/
+    status: PASS
+    result_path: harness_cert/results/H28/2026-10-06-e0-certification/
     minimal_repro: Deterministic zip of agents/baseline_v0_official; record ZIP SHA; submit once when a submission slot is justified.
-    notes: Local part (deterministic zip + validate_directory) is blocked only by harness_source.
+    notes: >-
+      Exact hypothesis unchanged. Operator reports current Submit to Competition -> File Upload
+      accepted submission.zip, created a submission record, ran evaluation and returned Succeeded / 0.05.
+      All three accessible copies (frozen local, upload, operator-attributed Kaggle download) independently
+      match 443572 bytes / the authority SHA256; all three pairwise cmp return 0. Ten ZIP members match
+      the official sample manifest; two historical deterministic builds match the same frozen bytes.
+      UI observations and remote download origin are operator-reported; no authenticated API/screenshot,
+      submission ID, precise timestamps, task outcomes or hidden runtime versions were supplied.
+      Score is a technical baseline, with no supported solved-task count or score-causality claim.
+      Frozen submission repository HEAD is 3c6133ea9a1d9440183bfacc72b9f6e823dc6208;
+      original ZIP build provenance separately records 199c25943b287b5e58b4067976880a9d53254f7e.
+      Curated report: harness_cert/reports/H28_KAGGLE_E0_CERTIFICATION_2026-10-06.md.
+      This hosted-path PASS does not promote H30 or any other component hypothesis.
 
   - id: H29
     title: get_status / submit_patch free-call behavior

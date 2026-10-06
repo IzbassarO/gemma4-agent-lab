@@ -18,8 +18,9 @@
 - A status changes only together with a curated `reports/<H-ID>.md` that states runtime, versions, command and raw-output location.
 - Nothing in `results/` becomes committable by being Markdown. Copy findings into `reports/` by hand, and never paste gold patch/test content, holdout trajectories or raw captures.
 - Evidence classes: OFFICIAL-DOCUMENTED, STATIC-OBSERVED, RUNTIME-REPRODUCED (with scope), COMMUNITY-EVIDENCE, HOST-UNKNOWN. Reading source is STATIC-OBSERVED at best and never produces PASS.
+- Hosted outcomes use the existing `OWN-KAGGLE-RUN` authority. Reports distinguish `KAGGLE-OBSERVED` operator observations from independently reproduced local facts, inference and unknowns; a local byte check alone does not establish remote execution or origin.
 - A git-level or mock-level reproduction is labeled with its scope. It does not certify the scorer.
-- Every result names the harness versions it ran against. Without them the result is at most `VERSION-SPECIFIC`.
+- Every component-behavior result names the harness versions it ran against. Without them the result is at most `VERSION-SPECIFIC`. A hosted-path hypothesis such as H28 can be `PASS` for one identified artifact and dated operator-observed outcome with hidden versions explicitly `UNKNOWN`; this certifies that observed acceptance/completion only and does not certify package semantics or other matrix items.
 
 ## Current blocker
 

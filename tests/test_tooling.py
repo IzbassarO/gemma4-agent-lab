@@ -179,7 +179,7 @@ def test_matrix_is_complete_and_honest():
         for flag in ("local_possible", "requires_model", "requires_gpu", "requires_docker"):
             assert isinstance(i[flag], bool), (i["id"], flag)
     assert {i["id"] for i in items if i["status"] == "PASS"} == {
-        "H04", "H05", "H13", "H14", "H18", "H26", "H29",
+        "H04", "H05", "H13", "H14", "H18", "H26", "H28", "H29",
     }
     for case in ("H04", "H05", "H18"):
         item = next(i for i in items if i["id"] == case)
@@ -205,6 +205,21 @@ def test_matrix_is_complete_and_honest():
     assert h26["blocked_by"] == []
     assert any(authority.startswith("REPRODUCED-LOCAL") for authority in h26["authority"])
     assert (REPO / "harness_cert/reports/H26_INCLUDE_PATHS_2026-10-03.md").is_file()
+    h28 = next(i for i in items if i["id"] == "H28")
+    assert h28["hypothesis"] == "The official sample packaged deterministically passes the current Kaggle submission path."
+    assert h28["blocked_by"] == []
+    assert any(authority.startswith("OWN-KAGGLE-RUN") and "operator-reported" in authority
+               for authority in h28["authority"])
+    assert not any(authority.startswith("REPRODUCED-LOCAL") for authority in h28["authority"])
+    assert h28["scope"] == "one frozen E0 artifact and operator-reported hosted completion; hidden runtime unknown"
+    assert h28["result_path"] == "harness_cert/results/H28/2026-10-06-e0-certification/"
+    assert (h28["local_possible"], h28["requires_model"], h28["requires_gpu"], h28["requires_docker"]) == (
+        False, True, True, False,
+    )
+    h28_report = "harness_cert/reports/H28_KAGGLE_E0_CERTIFICATION_2026-10-06.md"
+    assert h28_report in h28["notes"]
+    assert (REPO / h28_report).is_file()
+    assert next(i for i in items if i["id"] == "H30")["status"] == "NOT-REPRODUCED"
     assert {i["id"] for i in items if i["status"] == "DEFERRED"} == {"H16", "H24", "H25"}
 
 

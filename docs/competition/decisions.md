@@ -76,3 +76,34 @@ SCORER_ONLY_UNKNOWN. The bounded policy and limits are specified in
 `H23_PROTOCOL_V4.md`. No Kaggle/model/GPU/H26 work is included.
 *Reverse if:* a reviewed new protocol changes the trust boundary; never infer
 remote provenance or runtime behavior from an archive alone.
+
+### D014 — 2026-10-06 — H28 E0 technical-control milestone
+Accept H28 E0 as the first technical-control milestone, with authority
+OWN-KAGGLE-RUN explicitly operator-reported. Frozen source-review HEAD:
+`3c6133ea9a1d9440183bfacc72b9f6e823dc6208`; artifact: `submission.zip`,
+443572 bytes, SHA256
+`25d07b6484d3c4fb4683170ed85b7a3adfe2ff0c1962f7949e43bc3cf87e4fc3`.
+Original artifact-build provenance remains distinct from this review HEAD, as
+documented in the [H28 certification report](../../harness_cert/reports/H28_KAGGLE_E0_CERTIFICATION_2026-10-06.md).
+
+The direct live route was **Submit to Competition → File Upload**; the outcome
+was operator-reported **Succeeded**, with operator-reported score **0.05**.
+Independent local verification found the frozen, upload and operator-attributed
+Kaggle-returned copies byte-identical. Remote completion and returned-artifact
+attribution remain operator-reported. The technical path is verified within this
+evidence scope; the score is only a baseline, and no competitive optimization
+occurred before E0. No per-task solves, hidden scorer internals or exact hidden
+runtime are claimed. H30 is unrelated and remains NOT-REPRODUCED.
+
+**Protocol deviation:** E0 did not have a preregistered experiment-registry row
+before submission. The planned retrospective E0 registry backfill must record
+`preregistered: false`; it cannot imply prior registration.
+
+**Certification-policy interpretation accepted by Claude Code:** PASS is scoped
+to the dated 2026-10-06 review of the operator-observed Kaggle submission path
+that completed successfully for this frozen artifact, despite unknown hidden
+hosted component versions. This date is the review/certification date; exact
+remote event timestamps remain unknown. PASS records satisfaction of the exact
+H28 hypothesis and does not assert version-invariant Kaggle internals.
+*Reverse if:* evidence contradicts the artifact identity or operator-reported
+hosted completion; reassess H28 within this same scope.
