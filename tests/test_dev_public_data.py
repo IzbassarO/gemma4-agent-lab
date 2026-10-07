@@ -166,7 +166,7 @@ def test_unavailable_assets_fail(published, kind, size):
 
 
 @pytest.mark.parametrize("target", ["tasks.jsonl", "snapshots/fastapi_1.tgz"])
-def test_symlink_and_hardlink_files_are_rejected(published, tmp_path, target):
+def test_symlinks_rejected_and_only_public_assets_allow_hardlinks(published, tmp_path, target):
     root, row, _ = published
     path = root / target
     outside = tmp_path / "outside"
@@ -178,8 +178,11 @@ def test_symlink_and_hardlink_files_are_rejected(published, tmp_path, target):
         action()
     path.unlink()
     os.link(outside, path)
-    with pytest.raises(PublicDataError):
-        action()
+    if target == "tasks.jsonl":
+        with pytest.raises(PublicDataError):
+            action()
+    else:
+        assert action().snapshot.sha256 == sha256_bytes(outside.read_bytes())
 
 
 def test_symlink_root_and_asset_parent_are_rejected(published, tmp_path):

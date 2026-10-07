@@ -104,8 +104,11 @@ def _admit_asset(descriptor: int, metadata: TaskMetadata, kind: str) -> PublicAs
         asset_id = f"{metadata.repo.split('/')[1]}_{metadata.base_commit}"
         directory, extension = ("graphs", "json") if kind == "graph" else ("embeddings", "npz")
         relative = f"{directory}/{asset_id}.{extension}"
+    # Public exports may legitimately deduplicate with hardlinks. Full stream
+    # SHA/size still govern identity, and runtime staging makes a fresh copy.
+    # The mixed/gold tasks.jsonl source above retains single-link enforcement.
     observed = read_regular(descriptor, relative, max_bytes=MAX_PUBLIC_ASSET_BYTES,
-                            include=False, reject_hardlinks=True)
+                            include=False, reject_hardlinks=False)
     if observed.size == 0 or (kind != "snapshot" and observed.size <= CODE_INTEL_MIN_BYTES):
         raise PublicDataError(f"empty or unavailable public {kind} asset")
     # read_regular streams every byte: inventory partial_sha256 is never used.
