@@ -107,3 +107,26 @@ remote event timestamps remain unknown. PASS records satisfaction of the exact
 H28 hypothesis and does not assert version-invariant Kaggle internals.
 *Reverse if:* evidence contradicts the artifact identity or operator-reported
 hosted completion; reassess H28 within this same scope.
+
+### D015 — 2026-10-07 — S1-first E0 forensics on Linux GPU; Linux user-separation confinement
+- The first forensic experiment is the 12-task S1 slice (`EXP-20261007-001`,
+  `DEV-E0-FORENSICS-V1-S1`), not F0's 80 tasks, to certify the real runtime
+  and bound GPU cost first. Completing F0 later counts only under
+  byte-identical candidate/runtime/budget identity; otherwise it is a separate
+  experiment.
+- Real DEV runs use an operator-controlled Linux GPU runtime. Colab Pro is the
+  current candidate host; accelerator assignment is nondeterministic. Continue
+  only if the actually assigned accelerator satisfies >=40 GB VRAM; an
+  A100-class assignment qualifies, while L4/T4 assignments abort. The threshold
+  is an engineering admission rule, not a measured peak-memory claim. Keep
+  vLLM TP=1 and the official `subprocess` sandbox. The Mac never runs the 31B
+  model; reducing `max_model_len` below 32768 is prohibited.
+- On Linux the solver/verifier boundary is process separation plus an
+  unprivileged worker user and `0700` private roots. The macOS `sandbox-exec`
+  profile remains the synthetic certification path. Recorded as a fidelity
+  limit (no cgroup caps, no network namespace), not as equivalence.
+- A real run binds to its preregistration hash and a clean eval-infra commit;
+  the driver refuses otherwise. Only the frozen E0 ZIP is admitted as a
+  candidate in this tranche.
+*Reverse if:* a Docker-capable 4×L4-class host becomes available; then admit
+the Docker backend separately and rerun the preflight controls there.

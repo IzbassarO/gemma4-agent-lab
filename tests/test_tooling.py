@@ -236,6 +236,28 @@ def test_failure_taxonomy_is_exact():
     assert all(isinstance(f.layer, Layer) and f.description for f in Failure)
 
 
-def test_registry_has_no_real_experiments():
+def test_registry_rows_are_schema_example_or_valid_records():
+    import re
     lines = [json.loads(l) for l in (REPO / "experiments" / "registry.jsonl").read_text().splitlines() if l.strip()]
-    assert all(r.get("_is_example") is True for r in lines)
+    assert lines[0].get("_is_example") is True and all(not r.get("_is_example") for r in lines[1:])
+    ids = [r["experiment_id"] for r in lines[1:] if r["record_kind"] == "plan"]
+    assert len(ids) == len(set(ids)), "experiment IDs are never reused"
+    for r in lines[1:]:
+        assert re.fullmatch(r"EXP-\d{8}-\d{3}", r["experiment_id"])
+        assert r["record_kind"] in ("plan", "result", "decision")
+        if r["record_kind"] == "plan":  # preregistered before any run: no metrics, no decision
+            assert r["preregistered"] is True and r["decision"] is None
+            assert r["metrics"]["resolved"] is None and r["metrics"]["total"] == len(r["task_ids"])
+            assert (REPO / r["preregistration_doc"]).is_file()
+            if r["experiment_id"] == "EXP-20261007-001":
+                assert all(value is None for value in r["harness_versions"].values())
+                assert r["planned_harness_versions"] == {
+                    "swegemma": "0.2.7",
+                    "adk-submission": "0.2.12",
+                    "adk-eval-core": "0.1.0",
+                    "google-adk": "1.36.1",
+                    "litellm": None,
+                    "vllm": None,
+                }
+                assert r["hardware_runtime"] is None
+                assert ">=40 GB VRAM" in r["hardware_runtime_plan"]

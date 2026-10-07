@@ -2,7 +2,7 @@
 
 Research and engineering workspace for **Google – The Gemma 4 Developer Agent Competition**.
 
-**Current phase: STEP 0, Competition Environment & Harness Certification.** No agent optimization, no Gemma runs, no LoRA.
+**Current phase: competitive optimization, DEV forensics.** H28 E0 scored 0.05 on Kaggle (D014). Next run: `EXP-20261007-001` DEV-E0-FORENSICS-V1-S1 ([preregistration](docs/experiments/DEV_E0_FORENSICS_V1_S1_PREREG.md)), blocked on the [real-runtime admission tranche](docs/experiments/REAL_RUNTIME_TRANCHE_2026-10-07.md). No LoRA yet; the operator launches every model/GPU run.
 
 ## Data boundary
 
