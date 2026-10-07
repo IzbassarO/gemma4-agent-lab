@@ -1,0 +1,744 @@
+{
+  "algorithm": "tune-only; per-repo base_commit groups ordered by sha256(seed:repo:base_commit); greedy exact-quota fill; task IDs sorted lexicographically",
+  "algorithm_version": 1,
+  "parent_split": {
+    "sha256": "420e35ef6c6a249527bded93f4eee4d47aa8d1453b7a9a14aa80367f9cd05a12",
+    "version": "v1"
+  },
+  "schema_version": 1,
+  "screen_version": "v1",
+  "seed": "gemma4-agent-lab/screen/v1",
+  "source_dataset": {
+    "input_projection_sha256": "5a6188365392b2febde6d3067f5fea9e8c5dddcd7389a6e02a87e4333245df30",
+    "tasks_sha256": "e4b3fd60f69dbc2b9213e54eeb9636db78aefe92c1d06269d73d9f5f8f3c8ad6"
+  },
+  "stages": {
+    "S1": {
+      "by_repo": {
+        "Textualize/rich": 4,
+        "encode/httpx": 1,
+        "fastapi/fastapi": 6,
+        "psf/requests": 1
+      },
+      "count": 12,
+      "task_ids": [
+        "fastapi_14186",
+        "fastapi_14372",
+        "fastapi_14794",
+        "fastapi_14978",
+        "fastapi_15763",
+        "fastapi_9555",
+        "httpx_3672",
+        "requests_7502",
+        "rich_3468",
+        "rich_3676",
+        "rich_3777",
+        "rich_4079"
+      ]
+    },
+    "S2": {
+      "by_repo": {
+        "Textualize/rich": 15,
+        "encode/httpx": 1,
+        "fastapi/fastapi": 20,
+        "psf/requests": 4
+      },
+      "count": 40,
+      "task_ids": [
+        "fastapi_11194",
+        "fastapi_11355",
+        "fastapi_14186",
+        "fastapi_14349",
+        "fastapi_14356",
+        "fastapi_14372",
+        "fastapi_14448",
+        "fastapi_14458",
+        "fastapi_14583",
+        "fastapi_14794",
+        "fastapi_14873",
+        "fastapi_14953",
+        "fastapi_14964",
+        "fastapi_14978",
+        "fastapi_15023",
+        "fastapi_15030",
+        "fastapi_15280",
+        "fastapi_15763",
+        "fastapi_15800",
+        "fastapi_9555",
+        "httpx_3672",
+        "requests_6757",
+        "requests_7315",
+        "requests_7328",
+        "requests_7502",
+        "rich_2725",
+        "rich_3043",
+        "rich_3063",
+        "rich_3064",
+        "rich_3468",
+        "rich_3472",
+        "rich_3486",
+        "rich_3521",
+        "rich_3535",
+        "rich_3676",
+        "rich_3777",
+        "rich_3930",
+        "rich_3935",
+        "rich_3938",
+        "rich_4079"
+      ]
+    },
+    "S3": {
+      "by_repo": {
+        "Textualize/rich": 30,
+        "encode/httpx": 1,
+        "fastapi/fastapi": 41,
+        "psf/requests": 8
+      },
+      "count": 80,
+      "task_ids": [
+        "fastapi_11194",
+        "fastapi_11355",
+        "fastapi_12942",
+        "fastapi_13207",
+        "fastapi_13786",
+        "fastapi_14077",
+        "fastapi_14099",
+        "fastapi_14186",
+        "fastapi_14258",
+        "fastapi_14303",
+        "fastapi_14306",
+        "fastapi_14349",
+        "fastapi_14356",
+        "fastapi_14360",
+        "fastapi_14372",
+        "fastapi_14448",
+        "fastapi_14455",
+        "fastapi_14458",
+        "fastapi_14479",
+        "fastapi_14485",
+        "fastapi_14492",
+        "fastapi_14512",
+        "fastapi_14583",
+        "fastapi_14605",
+        "fastapi_14616",
+        "fastapi_14791",
+        "fastapi_14794",
+        "fastapi_14851",
+        "fastapi_14873",
+        "fastapi_14953",
+        "fastapi_14962",
+        "fastapi_14964",
+        "fastapi_14978",
+        "fastapi_15023",
+        "fastapi_15030",
+        "fastapi_15280",
+        "fastapi_15589",
+        "fastapi_15763",
+        "fastapi_15800",
+        "fastapi_5624",
+        "fastapi_9555",
+        "httpx_3672",
+        "requests_6589",
+        "requests_6592",
+        "requests_6629",
+        "requests_6757",
+        "requests_7315",
+        "requests_7328",
+        "requests_7502",
+        "requests_7505",
+        "rich_2725",
+        "rich_3043",
+        "rich_3061",
+        "rich_3063",
+        "rich_3064",
+        "rich_3130",
+        "rich_3278",
+        "rich_3296",
+        "rich_3468",
+        "rich_3469",
+        "rich_3470",
+        "rich_3472",
+        "rich_3486",
+        "rich_3506",
+        "rich_3521",
+        "rich_3535",
+        "rich_3675",
+        "rich_3676",
+        "rich_3718",
+        "rich_3772",
+        "rich_3777",
+        "rich_3905",
+        "rich_3930",
+        "rich_3934",
+        "rich_3935",
+        "rich_3938",
+        "rich_3942",
+        "rich_4070",
+        "rich_4075",
+        "rich_4079"
+      ]
+    }
+  },
+  "tasks": [
+    {
+      "base_commit": "a7f2dbe976bf72703376f0cd04487bfc4a849f83",
+      "group_key": "fastapi/fastapi@a7f2dbe976bf72703376f0cd04487bfc4a849f83",
+      "instance_id": "fastapi_11194",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "811fa898752e7f5697733a2958ff79ad8dfb5276",
+      "group_key": "fastapi/fastapi@811fa898752e7f5697733a2958ff79ad8dfb5276",
+      "instance_id": "fastapi_11355",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "27c0f7e75fc0ce26ca75295d455eb36f0ca033d3",
+      "group_key": "fastapi/fastapi@27c0f7e75fc0ce26ca75295d455eb36f0ca033d3",
+      "instance_id": "fastapi_12942",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "5126e099bdda51f261fd5a101b5f914991d31897",
+      "group_key": "fastapi/fastapi@5126e099bdda51f261fd5a101b5f914991d31897",
+      "instance_id": "fastapi_13207",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "e2354a0a063f2fcb890ec568f1a98e136a39fd25",
+      "group_key": "fastapi/fastapi@e2354a0a063f2fcb890ec568f1a98e136a39fd25",
+      "instance_id": "fastapi_13786",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "16d75d90eb96976a57b94cc24e4018859cd54c4d",
+      "group_key": "fastapi/fastapi@16d75d90eb96976a57b94cc24e4018859cd54c4d",
+      "instance_id": "fastapi_14077",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "861b22c40897a03d2d7e5926923d962121ed5e2e",
+      "group_key": "fastapi/fastapi@861b22c40897a03d2d7e5926923d962121ed5e2e",
+      "instance_id": "fastapi_14099",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "6e49dc029541aaa896fa63c47647ccd3f066df67",
+      "group_key": "fastapi/fastapi@6e49dc029541aaa896fa63c47647ccd3f066df67",
+      "instance_id": "fastapi_14186",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "e94028ab60d18080810910352bc9129e8046c92d",
+      "group_key": "fastapi/fastapi@e94028ab60d18080810910352bc9129e8046c92d",
+      "instance_id": "fastapi_14258",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "740ec2787b25e59f7aa9e3df1db09d4489c22718",
+      "group_key": "fastapi/fastapi@740ec2787b25e59f7aa9e3df1db09d4489c22718",
+      "instance_id": "fastapi_14303",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "08b09e5236e315b6f10265ed229f130d4befb4ea",
+      "group_key": "fastapi/fastapi@08b09e5236e315b6f10265ed229f130d4befb4ea",
+      "instance_id": "fastapi_14306",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "eaf611f9ee56de4f16c837d4f487a4b9fca507c4",
+      "group_key": "fastapi/fastapi@eaf611f9ee56de4f16c837d4f487a4b9fca507c4",
+      "instance_id": "fastapi_14349",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "6cf40df24d1d199fd25d034fc87fcae284fc23a2",
+      "group_key": "fastapi/fastapi@6cf40df24d1d199fd25d034fc87fcae284fc23a2",
+      "instance_id": "fastapi_14356",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "eead41bf4cf8587b4d86091dd3eabbb85796e717",
+      "group_key": "fastapi/fastapi@eead41bf4cf8587b4d86091dd3eabbb85796e717",
+      "instance_id": "fastapi_14360",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "566e3157a5517784c741dbf36e39687af326fe90",
+      "group_key": "fastapi/fastapi@566e3157a5517784c741dbf36e39687af326fe90",
+      "instance_id": "fastapi_14372",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "c57ac7bdf3613798c94caceff562a41fa16d4a2d",
+      "group_key": "fastapi/fastapi@c57ac7bdf3613798c94caceff562a41fa16d4a2d",
+      "instance_id": "fastapi_14448",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "603df6e36f59cc4a3e189f506b8f36d1e816c3ac",
+      "group_key": "fastapi/fastapi@603df6e36f59cc4a3e189f506b8f36d1e816c3ac",
+      "instance_id": "fastapi_14455",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "516169428d2fa189d34318ebc469a082c49c1189",
+      "group_key": "fastapi/fastapi@516169428d2fa189d34318ebc469a082c49c1189",
+      "instance_id": "fastapi_14458",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "2b212ddd7604891d42e2ffbafe764c334230bdb7",
+      "group_key": "fastapi/fastapi@2b212ddd7604891d42e2ffbafe764c334230bdb7",
+      "instance_id": "fastapi_14479",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "60699f306b67dc1f4918ebea17f04d7a48cda645",
+      "group_key": "fastapi/fastapi@60699f306b67dc1f4918ebea17f04d7a48cda645",
+      "instance_id": "fastapi_14485",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "a456e92a21d5b94a67d6d0fd070218df09444443",
+      "group_key": "fastapi/fastapi@a456e92a21d5b94a67d6d0fd070218df09444443",
+      "instance_id": "fastapi_14492",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "1fcec88ad2df4541b6a81c4786c4d039dc745e1e",
+      "group_key": "fastapi/fastapi@1fcec88ad2df4541b6a81c4786c4d039dc745e1e",
+      "instance_id": "fastapi_14512",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "6513d4daa16a536d17743de6a292f49bd06388a4",
+      "group_key": "fastapi/fastapi@6513d4daa16a536d17743de6a292f49bd06388a4",
+      "instance_id": "fastapi_14583",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "6b53786f626db95a42fd0f66afd360bab161f4b1",
+      "group_key": "fastapi/fastapi@6b53786f626db95a42fd0f66afd360bab161f4b1",
+      "instance_id": "fastapi_14605",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "54f8aeeb9a15e4d5a12401ec5549840966df0087",
+      "group_key": "fastapi/fastapi@54f8aeeb9a15e4d5a12401ec5549840966df0087",
+      "instance_id": "fastapi_14616",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "08924400c2c75533685148b029defcf6913f1def",
+      "group_key": "fastapi/fastapi@08924400c2c75533685148b029defcf6913f1def",
+      "instance_id": "fastapi_14791",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "464c359bb03f7ba72330198cc9f44df36194837d",
+      "group_key": "fastapi/fastapi@464c359bb03f7ba72330198cc9f44df36194837d",
+      "instance_id": "fastapi_14794",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "8e50c55fd90c4433ddc9096ff439da9498a8314a",
+      "group_key": "fastapi/fastapi@8e50c55fd90c4433ddc9096ff439da9498a8314a",
+      "instance_id": "fastapi_14851",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "cd31576d5704b6aef1bdadc43770238cd88aad2b",
+      "group_key": "fastapi/fastapi@cd31576d5704b6aef1bdadc43770238cd88aad2b",
+      "instance_id": "fastapi_14873",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "d2c17b603d2f986d5f3800d3bf24acba8e1f485b",
+      "group_key": "fastapi/fastapi@d2c17b603d2f986d5f3800d3bf24acba8e1f485b",
+      "instance_id": "fastapi_14953",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "1e78a36b7310003f0ff634627d8a7bc53c6ccdee",
+      "group_key": "fastapi/fastapi@1e78a36b7310003f0ff634627d8a7bc53c6ccdee",
+      "instance_id": "fastapi_14962",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "bc06e4296d588f39f38c7ac2fc96d3913c565962",
+      "group_key": "fastapi/fastapi@bc06e4296d588f39f38c7ac2fc96d3913c565962",
+      "instance_id": "fastapi_14964",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "94a1ee749e63591e6e275b726a66e07a25f6c407",
+      "group_key": "fastapi/fastapi@94a1ee749e63591e6e275b726a66e07a25f6c407",
+      "instance_id": "fastapi_14978",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "c0836dc1b7f4ba91e9563c8c4ccd0ebe655bc914",
+      "group_key": "fastapi/fastapi@c0836dc1b7f4ba91e9563c8c4ccd0ebe655bc914",
+      "instance_id": "fastapi_15023",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "48d58ae3b6ef4ded5a4794618c00345667256d98",
+      "group_key": "fastapi/fastapi@48d58ae3b6ef4ded5a4794618c00345667256d98",
+      "instance_id": "fastapi_15030",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "6ee87478d821171139264cd9cd17cbd2232934ce",
+      "group_key": "fastapi/fastapi@6ee87478d821171139264cd9cd17cbd2232934ce",
+      "instance_id": "fastapi_15280",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "22b02e26f9e8c7e32bd8266e2b0ebe8bb3a0db2b",
+      "group_key": "fastapi/fastapi@22b02e26f9e8c7e32bd8266e2b0ebe8bb3a0db2b",
+      "instance_id": "fastapi_15589",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "9a9c4ad5d06f5fe8ee6775a5aeaa2f83c854f263",
+      "group_key": "fastapi/fastapi@9a9c4ad5d06f5fe8ee6775a5aeaa2f83c854f263",
+      "instance_id": "fastapi_15763",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "f1d750fddad90e2faad6c3cc5c85c7687b787e89",
+      "group_key": "fastapi/fastapi@f1d750fddad90e2faad6c3cc5c85c7687b787e89",
+      "instance_id": "fastapi_15800",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "c6487ed632056e450d844846a1b63be551a3cbc6",
+      "group_key": "fastapi/fastapi@c6487ed632056e450d844846a1b63be551a3cbc6",
+      "instance_id": "fastapi_5624",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "4976568fc7cb7501729d8f84d946cde1e91299cd",
+      "group_key": "fastapi/fastapi@4976568fc7cb7501729d8f84d946cde1e91299cd",
+      "instance_id": "fastapi_9555",
+      "partition": "tune",
+      "repo": "fastapi/fastapi"
+    },
+    {
+      "base_commit": "4acf5c2c37714cc63b5cf71b3e284fca83c90311",
+      "group_key": "encode/httpx@4acf5c2c37714cc63b5cf71b3e284fca83c90311",
+      "instance_id": "httpx_3672",
+      "partition": "tune",
+      "repo": "encode/httpx"
+    },
+    {
+      "base_commit": "7a13c041dbef42f9f3feb14110f02626f6892e9a",
+      "group_key": "psf/requests@7a13c041dbef42f9f3feb14110f02626f6892e9a",
+      "instance_id": "requests_6589",
+      "partition": "tune",
+      "repo": "psf/requests"
+    },
+    {
+      "base_commit": "0b4d494192de489701d3a2e32acef8fb5d3f042e",
+      "group_key": "psf/requests@0b4d494192de489701d3a2e32acef8fb5d3f042e",
+      "instance_id": "requests_6592",
+      "partition": "tune",
+      "repo": "psf/requests"
+    },
+    {
+      "base_commit": "7a13c041dbef42f9f3feb14110f02626f6892e9a",
+      "group_key": "psf/requests@7a13c041dbef42f9f3feb14110f02626f6892e9a",
+      "instance_id": "requests_6629",
+      "partition": "tune",
+      "repo": "psf/requests"
+    },
+    {
+      "base_commit": "0e322af87745eff34caffe4df68456ebc20d9068",
+      "group_key": "psf/requests@0e322af87745eff34caffe4df68456ebc20d9068",
+      "instance_id": "requests_6757",
+      "partition": "tune",
+      "repo": "psf/requests"
+    },
+    {
+      "base_commit": "6360477c52303c9445b45fa8744b02d05a2f0905",
+      "group_key": "psf/requests@6360477c52303c9445b45fa8744b02d05a2f0905",
+      "instance_id": "requests_7315",
+      "partition": "tune",
+      "repo": "psf/requests"
+    },
+    {
+      "base_commit": "cbce031327be4f1b4b5fd041ff4dcaa8efa2ce53",
+      "group_key": "psf/requests@cbce031327be4f1b4b5fd041ff4dcaa8efa2ce53",
+      "instance_id": "requests_7328",
+      "partition": "tune",
+      "repo": "psf/requests"
+    },
+    {
+      "base_commit": "661970d171d9c3e12e4c789c4768db647d8c4da0",
+      "group_key": "psf/requests@661970d171d9c3e12e4c789c4768db647d8c4da0",
+      "instance_id": "requests_7502",
+      "partition": "tune",
+      "repo": "psf/requests"
+    },
+    {
+      "base_commit": "6f205ff422bccd5e4c4fc0b64c5f3e7df5181db6",
+      "group_key": "psf/requests@6f205ff422bccd5e4c4fc0b64c5f3e7df5181db6",
+      "instance_id": "requests_7505",
+      "partition": "tune",
+      "repo": "psf/requests"
+    },
+    {
+      "base_commit": "577def22dd83b999c5937cb2bf2ed49600943325",
+      "group_key": "Textualize/rich@577def22dd83b999c5937cb2bf2ed49600943325",
+      "instance_id": "rich_2725",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "8a616de8e25db3c93abaaa220c493d80878de69d",
+      "group_key": "Textualize/rich@8a616de8e25db3c93abaaa220c493d80878de69d",
+      "instance_id": "rich_3043",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "aca9467ec6a482b3bed1ba7d2e3de72271c5f817",
+      "group_key": "Textualize/rich@aca9467ec6a482b3bed1ba7d2e3de72271c5f817",
+      "instance_id": "rich_3061",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "368e8ad77c95a6bef8f9d332039091d1417296bc",
+      "group_key": "Textualize/rich@368e8ad77c95a6bef8f9d332039091d1417296bc",
+      "instance_id": "rich_3063",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "01b85ac116c4635b6ddb8b488be8254be6df2a84",
+      "group_key": "Textualize/rich@01b85ac116c4635b6ddb8b488be8254be6df2a84",
+      "instance_id": "rich_3064",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "720800e6930d85ad027b1e9bd0cbb96b5e994ce3",
+      "group_key": "Textualize/rich@720800e6930d85ad027b1e9bd0cbb96b5e994ce3",
+      "instance_id": "rich_3130",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "4c5d305bb902ce97011666ada19e48d0b27b49e1",
+      "group_key": "Textualize/rich@4c5d305bb902ce97011666ada19e48d0b27b49e1",
+      "instance_id": "rich_3278",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "fde5d6eee3b0437eaecdcbf6f8b11aeab3a5d503",
+      "group_key": "Textualize/rich@fde5d6eee3b0437eaecdcbf6f8b11aeab3a5d503",
+      "instance_id": "rich_3296",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "ae15db600976a7999d21653002f338d0761b180c",
+      "group_key": "Textualize/rich@ae15db600976a7999d21653002f338d0761b180c",
+      "instance_id": "rich_3468",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "c478588f3c228a4e86741a057c42b452d7bc6bce",
+      "group_key": "Textualize/rich@c478588f3c228a4e86741a057c42b452d7bc6bce",
+      "instance_id": "rich_3469",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "0ba607dc080c9f102b5ae5346bcdb70d6e9c969d",
+      "group_key": "Textualize/rich@0ba607dc080c9f102b5ae5346bcdb70d6e9c969d",
+      "instance_id": "rich_3470",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "b6f2f7aa5b27f612f391cd28212aff51ad0d42d1",
+      "group_key": "Textualize/rich@b6f2f7aa5b27f612f391cd28212aff51ad0d42d1",
+      "instance_id": "rich_3472",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "d0de442c08df8793c5ff36d9ad322ca5c47fc38c",
+      "group_key": "Textualize/rich@d0de442c08df8793c5ff36d9ad322ca5c47fc38c",
+      "instance_id": "rich_3486",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "4101991898ee7a09fe1706daca24af5e1e054862",
+      "group_key": "Textualize/rich@4101991898ee7a09fe1706daca24af5e1e054862",
+      "instance_id": "rich_3506",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "66074922edabeac684434b4d87ee994fb97b0627",
+      "group_key": "Textualize/rich@66074922edabeac684434b4d87ee994fb97b0627",
+      "instance_id": "rich_3521",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "0f2f51b872d14588de3a65968f5cdde6fb5694a3",
+      "group_key": "Textualize/rich@0f2f51b872d14588de3a65968f5cdde6fb5694a3",
+      "instance_id": "rich_3535",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "edc6b0a39b6df1c0e26d409bb5c5eda7149b2de6",
+      "group_key": "Textualize/rich@edc6b0a39b6df1c0e26d409bb5c5eda7149b2de6",
+      "instance_id": "rich_3675",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "2b5d648b2c62960deb6439f4204ed8fa6eb3cf7b",
+      "group_key": "Textualize/rich@2b5d648b2c62960deb6439f4204ed8fa6eb3cf7b",
+      "instance_id": "rich_3676",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "7d36119f8378b36129502c3281a7faffef837e02",
+      "group_key": "Textualize/rich@7d36119f8378b36129502c3281a7faffef837e02",
+      "instance_id": "rich_3718",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "2809954800af15b4027364cebf82390fe23dc194",
+      "group_key": "Textualize/rich@2809954800af15b4027364cebf82390fe23dc194",
+      "instance_id": "rich_3772",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "49117ced6648a432d85951f72dce777038f6ce09",
+      "group_key": "Textualize/rich@49117ced6648a432d85951f72dce777038f6ce09",
+      "instance_id": "rich_3777",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "96dd4b60e3a7c647c43a85ad375afa690b3bb85b",
+      "group_key": "Textualize/rich@96dd4b60e3a7c647c43a85ad375afa690b3bb85b",
+      "instance_id": "rich_3905",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "53757bc234cf18977cade41a5b64f3abaccb0b85",
+      "group_key": "Textualize/rich@53757bc234cf18977cade41a5b64f3abaccb0b85",
+      "instance_id": "rich_3930",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "6764b24739b580c0c32ff5ef0b971ed4cfcf4f75",
+      "group_key": "Textualize/rich@6764b24739b580c0c32ff5ef0b971ed4cfcf4f75",
+      "instance_id": "rich_3934",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "fe55a131c2780fa856464ad04d7d6dc8a1079b72",
+      "group_key": "Textualize/rich@fe55a131c2780fa856464ad04d7d6dc8a1079b72",
+      "instance_id": "rich_3935",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "05ff970926cbd0b5d0acb6fc18cdbd1fc971e582",
+      "group_key": "Textualize/rich@05ff970926cbd0b5d0acb6fc18cdbd1fc971e582",
+      "instance_id": "rich_3938",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "c595fa95068dd2c5095d25446b2f0571bc0b3995",
+      "group_key": "Textualize/rich@c595fa95068dd2c5095d25446b2f0571bc0b3995",
+      "instance_id": "rich_3942",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "fc41075a3206d2a5fd846c6f41c4d2becab814fa",
+      "group_key": "Textualize/rich@fc41075a3206d2a5fd846c6f41c4d2becab814fa",
+      "instance_id": "rich_4070",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "1fc7cb210ae52eb099df39818ddb9569e5b14c7b",
+      "group_key": "Textualize/rich@1fc7cb210ae52eb099df39818ddb9569e5b14c7b",
+      "instance_id": "rich_4075",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    },
+    {
+      "base_commit": "19c67b9a3479841e9133bea94607c89ee931d3fc",
+      "group_key": "Textualize/rich@19c67b9a3479841e9133bea94607c89ee931d3fc",
+      "instance_id": "rich_4079",
+      "partition": "tune",
+      "repo": "Textualize/rich"
+    }
+  ]
+}
