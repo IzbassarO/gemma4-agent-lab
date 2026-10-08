@@ -31,11 +31,17 @@ def main() -> None:
     seal_json(evidence / "process_observation.json", process_observation(request))
     if request["mode"] == "isolation_probe":
         native = {"returned_patch": "", "agent_error": None, "terminal_reason": "isolation_probe"}
+    elif request["mode"] == "real_public":
+        from .runtime_real import solver_execute_real
+        native = solver_execute_real(request)
     else:
         from .runtime_adapter import solver_execute
         native = solver_execute(request)
     if type(native) is not dict or type(native.get("returned_patch")) is not str:
         raise ContractError("native solver did not return patch text")
+    if request["mode"] == "real_public":
+        from .runtime_provenance import assert_secret_free
+        assert_secret_free(native)
     if request["observation_enabled"]:
         trace_ref = native.get("native_trace_ref")
         if trace_ref is not None:
@@ -54,8 +60,16 @@ def main() -> None:
     seal_json(evidence / "events.json", {"events": [event.to_dict() for event in recorder.events]})
     seal_json(evidence / "native_observation.json", native)
     provenance = request["provenance"]
+    if request["mode"] == "real_public":
+        from .runtime_provenance import real_fingerprint_from_request
+        seal_json(evidence / "real_fingerprint.json", real_fingerprint_from_request(
+            request, phase="solver", model_server_identity=native.get("model_server_identity", {})))
+        provenance = {key: provenance[key] for key in ("git_head", "solver_contract_sha256", "task_manifest_sha256")}
+        endpoint = "LOOPBACK_" + __import__("hashlib").sha256(runtime["model_endpoint"].encode()).hexdigest()
+    else:
+        endpoint = runtime["model_endpoint"]
     fingerprint = capture_runtime_fingerprint(**provenance, candidate_sha256=E0_SHA256,
-                                              sandbox_image=runtime["image"], model_endpoint_identity=runtime["model_endpoint"])
+                                              sandbox_image=runtime["image"], model_endpoint_identity=endpoint)
     status = native.get("runtime_status", "completed")
     observations = {name: native.get(name) for name in (
         "submitted_patch", "workspace_patch", "agent_error", "escaped_exception", "llm_calls",

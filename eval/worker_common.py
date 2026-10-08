@@ -5,6 +5,7 @@ import hashlib
 import os
 import stat
 import tempfile
+import re
 from pathlib import Path
 
 from ._contracts import ContractError, canonical_json, closed_dict, load_json_object
@@ -17,6 +18,12 @@ CASES = ("H05", "H04", "H18", "H13", "H14", "H29", "H29_BOUNDARY", "EMPTY_SUBMIT
 RUNTIME_FIELDS = ("harness_root", "public_root", "worker_root", "evidence_root",
                   "submission_root", "wheels_root", "setup_root", "sandbox", "image",
                   "model_endpoint", "source_wheels_root", "pytest_support_root")
+REAL_RUNTIME_FIELDS = (*RUNTIME_FIELDS, "budget", "compaction", "worker_user", "preregistration_sha256")
+PROVENANCE_FIELDS = ("git_head", "solver_contract_sha256", "task_manifest_sha256")
+REAL_PROVENANCE_FIELDS = (*PROVENANCE_FIELDS, "eval_infra_source_identity", "candidate_identity",
+                          "preregistration_identity", "model_endpoint_identity", "public_identities",
+                          "harness_lock_sha256", "confinement", "runtime_sources")
+REAL_PROVENANCE_FIELDS = (*REAL_PROVENANCE_FIELDS, "staged_source_paths")
 
 
 def read_request(stream) -> dict:
@@ -35,11 +42,23 @@ def validate_request(value: dict, *, verifier: bool = False) -> dict:
         raise ContractError("worker schema must be 1")
     if type(value["observation_enabled"]) is not bool:
         raise ContractError("observation_enabled must be bool")
-    if value["synthetic_case"] not in CASES or value["mode"] not in ("isolation_probe", "native_scripted"):
-        raise ContractError("only admitted synthetic execution is available")
-    runtime = closed_dict(value["runtime"], allowed=RUNTIME_FIELDS, required=RUNTIME_FIELDS, name="runtime")
-    if runtime["sandbox"] != "subprocess" or runtime["model_endpoint"] != "SCRIPTED_ONLY":
-        raise ContractError("public/model execution requires later operator admission")
+    real = value["mode"] == "real_public"
+    if real:
+        from .real_contracts import validate_real_runtime
+        if value["synthetic_case"] is not None:
+            raise ContractError("real request must not contain a synthetic case")
+        runtime = closed_dict(value["runtime"], allowed=REAL_RUNTIME_FIELDS, required=REAL_RUNTIME_FIELDS, name="runtime")
+        validate_real_runtime(runtime)
+        if (type(runtime["worker_user"]) is not str
+                or re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", runtime["worker_user"]) is None
+                or runtime["worker_user"] == "root"):
+            raise ContractError("real worker requires an explicit unprivileged account")
+    else:
+        if value["synthetic_case"] not in CASES or value["mode"] not in ("isolation_probe", "native_scripted"):
+            raise ContractError("only admitted synthetic execution is available")
+        runtime = closed_dict(value["runtime"], allowed=RUNTIME_FIELDS, required=RUNTIME_FIELDS, name="runtime")
+        if runtime["sandbox"] != "subprocess" or runtime["model_endpoint"] != "SCRIPTED_ONLY":
+            raise ContractError("public/model execution requires later operator admission")
     root = Path(runtime["worker_root"])
     if not root.is_absolute() or Path.cwd() != root:
         raise ContractError("worker must start in its explicit root")
@@ -68,15 +87,104 @@ def validate_request(value: dict, *, verifier: bool = False) -> dict:
                                 reject_hardlinks=True, private=True)
     if observed.sha256 != E0_SHA256 or observed.size != E0_SIZE:
         raise ContractError("frozen candidate identity mismatch")
-    closed_dict(value["provenance"], allowed=("git_head", "solver_contract_sha256", "task_manifest_sha256"),
-                required=("git_head", "solver_contract_sha256", "task_manifest_sha256"), name="provenance")
+    fields = REAL_PROVENANCE_FIELDS if real else PROVENANCE_FIELDS
+    closed_dict(value["provenance"], allowed=fields, required=fields, name="provenance")
+    if real:
+        from .runtime_provenance import real_fingerprint_from_request, assert_secret_free
+        from ._contracts import hex_digest
+        hex_digest(value["provenance"]["task_manifest_sha256"], "task_manifest_sha256")
+        fingerprint = real_fingerprint_from_request(value, phase="verifier" if verifier else "solver")
+        if (fingerprint["candidate_identity"] != candidate_identity()
+                or fingerprint["preregistration_identity"]["sha256"] != runtime["preregistration_sha256"]
+                or fingerprint["model_endpoint_identity"] != runtime["model_endpoint"]
+                or fingerprint["eval_infra_source_identity"]["git_head"] != value["provenance"]["git_head"]):
+            raise ContractError("real request provenance disagrees with admitted runtime")
+        hex_digest(value["provenance"]["harness_lock_sha256"], "harness_lock_sha256")
+        assert_secret_free(value)
+        validate_worker_sources(value)
     if not verifier:
         task = SolverTask.from_dict(value["task"])
-        if task.repo != "synthetic/probe" or not task.instance_id.startswith("synthetic_"):
+        if real:
+            from .real_contracts import validate_public_task_identity
+            validate_public_task_identity(task)
+        elif task.repo != "synthetic/probe" or not task.instance_id.startswith("synthetic_"):
             raise ContractError("public DEV execution is disabled in this tranche")
         if task.sha256() != value["provenance"]["solver_contract_sha256"]:
             raise ContractError("solver contract identity mismatch")
+    elif real:
+        from .verifier_task import VerifierTask
+        from .real_contracts import validate_public_task_identity
+        task = VerifierTask.from_dict(value["task"])
+        validate_public_task_identity(task)
+        if task.fail_to_pass is not None or task.pass_to_pass is not None:
+            raise ContractError("real public verifier cannot receive private node lists")
     return value
+
+
+def candidate_identity() -> dict:
+    return {"sha256": E0_SHA256, "size_bytes": E0_SIZE}
+
+
+def validate_worker_sources(request: dict) -> None:
+    """Compare use-time code with coordinator source identity, never disk authority."""
+    from tools.common import tree_sha256
+    expected = request["provenance"]["runtime_sources"]
+    if type(expected) is not dict or not expected:
+        raise ContractError("real request lacks authoritative runtime source inventory")
+    identities = {}
+    for path, identity in expected.items():
+        if (type(path) is not str or not path.endswith(".py") or Path(path).is_absolute()
+                or any(part in ("", ".", "..") for part in path.split("/")) or "\\" in path):
+            raise ContractError("runtime source inventory has an invalid path")
+        closed_dict(identity, allowed=("sha256", "size_bytes"), required=("sha256", "size_bytes"), name="source")
+        from ._contracts import hex_digest
+        hex_digest(identity["sha256"], "source sha256")
+        if type(identity["size_bytes"]) is not int or identity["size_bytes"] < 0:
+            raise ContractError("runtime source size is invalid")
+        identities[path] = identity["sha256"]
+    if tree_sha256(identities) != request["provenance"]["eval_infra_source_identity"]["runtime_source_sha256"]:
+        raise ContractError("runtime source inventory digest mismatch")
+    root = Path(request["runtime"]["worker_root"])
+    with anchor_directory(root / "evidence", private=True) as fd:
+        data = read_regular(fd, "runtime_sources.json", max_bytes=4 * 1024 * 1024,
+                            include=True, private=True, reject_hardlinks=True).data
+    records = load_json_object(data, "staged source inventory").get("sources")
+    if type(records) is not list or not records:
+        raise ContractError("staged runtime source inventory is missing")
+    for record in records:
+        closed_dict(record, allowed=("relative_path", "sha256", "size_bytes"),
+                    required=("relative_path", "sha256", "size_bytes"), name="staged source")
+        if type(record["relative_path"]) is not str:
+            raise ContractError("staged source path must be text")
+    staged = request["provenance"]["staged_source_paths"]
+    if (type(staged) is not list or not staged or any(type(path) is not str for path in staged)
+            or len(set(staged)) != len(staged) or not set(staged) <= set(expected)):
+        raise ContractError("coordinator staged-source subset is missing or invalid")
+    if len(records) != len(staged) or {record["relative_path"] for record in records} != set(staged):
+        raise ContractError("staged inventory differs from coordinator source subset")
+    actual = set()
+    for path in (root / "code").rglob("*"):
+        if path.is_symlink():
+            raise ContractError("worker code tree contains a symlink")
+        if path.is_file() and path.suffix == ".py":
+            actual.add(path.relative_to(root / "code").as_posix())
+    if actual != set(staged):
+        raise ContractError("worker code tree differs from coordinator staged subset")
+    paths = set()
+    with anchor_directory(root / "code", private=True) as fd:
+        for record in records:
+            closed_dict(record, allowed=("relative_path", "sha256", "size_bytes"),
+                        required=("relative_path", "sha256", "size_bytes"), name="staged source")
+            path = record["relative_path"]
+            if path in paths or path not in expected:
+                raise ContractError("staged source is outside admitted source inventory")
+            paths.add(path)
+            if {key: record[key] for key in ("sha256", "size_bytes")} != expected[path]:
+                raise ContractError("staged record differs from coordinator source identity")
+            observed = read_regular(fd, path, max_bytes=4 * 1024 * 1024, include=False,
+                                    private=True, reject_hardlinks=True)
+            if expected[path] != {"sha256": observed.sha256, "size_bytes": observed.size}:
+                raise ContractError("worker code no longer matches coordinator source identity")
 
 
 def seal_json(path: Path, value) -> None:
@@ -129,6 +237,10 @@ def process_observation(request: dict) -> dict:
         except OSError:
             continue
         open_fds.append(number)
-    return {"pid": os.getpid(), "cwd": str(Path.cwd()), "argv": list(__import__("sys").argv),
+    observed = {"pid": os.getpid(), "cwd": str(Path.cwd()), "argv": list(__import__("sys").argv),
             "environment": dict(os.environ), "open_fds": open_fds,
             "request": request, "imports": sorted(__import__("sys").modules)}
+    if request["mode"] == "real_public":
+        from .runtime_provenance import sanitize_evidence
+        return sanitize_evidence(observed)
+    return observed

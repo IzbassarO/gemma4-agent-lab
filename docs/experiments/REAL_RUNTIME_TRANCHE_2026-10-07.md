@@ -475,13 +475,28 @@ result record.
    commit; `uv venv --python 3.12 /opt/harness`; install the five v28 wheels
    from `artifacts/harness_wheels/v28` with `--no-deps`, then
    `harness_cert/locks/harness_linux_x86_64_py312.lock` with
-   `--require-hashes`. The venv must be world-readable (`chmod -R a+rX`).
+   `--require-hashes`. The venv must be readable/executable by the worker
+   account; admission does not require a particular venv mode.
+   The repository clone or at least its `.git` must deny the worker account:
+   the confinement probe requires opening `.git` to raise `PermissionError`.
+   Keep the readable harness installation outside that protected repository.
 4. **Dataset subset.** Place under `/content/data` (root, `0700`): full
    `tasks.jsonl`, `wheels/`, `sandbox/setup.py`, and for the 12 S1 IDs the
    snapshot `.tgz`, graph `.json` and embedding `.npz` (about 2.1 GB; from
    Drive or Kaggle). `python -m tools.inventory_dataset`-style hashing is not
    required; the admitted loader hashes what it reads and fails closed on
    missing assets.
+   Before execution, protected public/private/artifact roots must exist and
+   deny the worker account's `os.open(O_RDONLY)` probes. The actual
+   `--worker-root` parent must be an existing unaliased directory where the
+   privileged coordinator can create/chown/archive/remove fresh roots. The
+   worker must have directory read and search access through this parent and
+   every ancestor: the descriptor reader opens each ancestor directory.
+   Keep that parent outside roots that deny the worker. The implementation
+   requires no fixed parent owner or octal mode; each generated worker root
+   is recursively worker-owned and `0700`. The harness interpreter, libraries
+   and their ancestors must be readable/searchable, with interpreter execution
+   permitted. Actual Linux probes and worker startup must verify this layout.
 5. **Model.** Download the `gemma-4-31b-it-qat-w4a16-ct` weights (HF or Kaggle
    Models; record the exact repo id, revision and `sha256sum` of the
    safetensors). About 17 GB.
@@ -506,8 +521,12 @@ result record.
     artifacts/submissions/e0_official_control/submission.zip --endpoint
     http://127.0.0.1:8000/v1 --public-root /content/data --private-root
     /content/private --artifact-root artifacts/dev_runtime/EXP-20261007-001
-    --worker-user gemma_worker --prereg
+    --worker-user gemma_worker --worker-timeout-seconds 3600 --prereg
     docs/experiments/DEV_E0_FORENSICS_V1_S1_PREREG.md`. Expect 1–2 hours.
+    Supply the additional required path arguments documented in
+    `DEV_REAL_RUNTIME_ADMISSION.md`. The 3600-second per-phase process timeout
+    is infrastructure; E0's frozen agent budget remains one minute, ten counted
+    tool calls, fifty turns and a sixty-second command timeout.
     Watch for `P0` lines; the driver stops itself on them.
 11. **Archive.** `report`, then zip `artifacts/dev_runtime/EXP-20261007-001/`
     and copy it off the session (Drive). Never commit it. Stop the GPU.

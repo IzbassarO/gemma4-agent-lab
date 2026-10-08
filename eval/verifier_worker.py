@@ -18,7 +18,10 @@ from .worker_common import (E0_SHA256, evidence_artifacts, patch_sha256, process
 def main() -> None:
     request = validate_request(read_request(sys.stdin), verifier=True)
     task = VerifierTask.from_dict(request["task"])
-    if task.repo != "synthetic/probe" or not task.instance_id.startswith("synthetic_"):
+    if request["mode"] == "real_public":
+        from .real_contracts import validate_public_task_identity
+        validate_public_task_identity(task)
+    elif task.repo != "synthetic/probe" or not task.instance_id.startswith("synthetic_"):
         raise ContractError("public verification requires later operator admission")
     material = VerifierMaterial(task, request["test_patch"])
     text(request["returned_patch"], "returned_patch")
@@ -38,15 +41,31 @@ def main() -> None:
     if request["mode"] == "isolation_probe":
         native = {"resolved": None, "error": None, "native_result": None,
                   "input_patch": request["returned_patch"], "input_patch_sha256": request["returned_patch_sha256"]}
+    elif request["mode"] == "real_public":
+        from .runtime_real import verifier_execute_real
+        native = verifier_execute_real(request)
+        recorder.append("verification", native_reference="native_observation.json")
     else:
         from .runtime_adapter import verifier_execute
         native = verifier_execute(request)
         recorder.append("verification", native_reference="native_observation.json")
+    if request["mode"] == "real_public":
+        from .runtime_provenance import assert_secret_free
+        assert_secret_free(native)
     recorder.append("verifier_finished")
     seal_json(evidence / "events.json", {"events": [event.to_dict() for event in recorder.events]})
     seal_json(evidence / "native_observation.json", native)
-    fingerprint = capture_runtime_fingerprint(**request["provenance"], candidate_sha256=E0_SHA256,
-                                              sandbox_image=runtime["image"], model_endpoint_identity=runtime["model_endpoint"])
+    provenance = request["provenance"]
+    if request["mode"] == "real_public":
+        from .runtime_provenance import real_fingerprint_from_request
+        seal_json(evidence / "real_fingerprint.json", real_fingerprint_from_request(
+            request, phase="verifier", model_server_identity=native.get("model_server_identity", {})))
+        provenance = {key: provenance[key] for key in ("git_head", "solver_contract_sha256", "task_manifest_sha256")}
+        endpoint = "LOOPBACK_" + __import__("hashlib").sha256(runtime["model_endpoint"].encode()).hexdigest()
+    else:
+        endpoint = runtime["model_endpoint"]
+    fingerprint = capture_runtime_fingerprint(**provenance, candidate_sha256=E0_SHA256,
+                                              sandbox_image=runtime["image"], model_endpoint_identity=endpoint)
     native_result = native.get("native_result")
     result = VerifierRunResult(1, task.instance_id, "error" if native.get("error") else "completed",
                                request["returned_patch_sha256"], native.get("resolved"),

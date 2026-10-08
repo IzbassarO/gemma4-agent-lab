@@ -1,7 +1,7 @@
-"""One-task trusted coordinator. Only fixed synthetic execution is admitted.
+"""One-task trusted coordinator with separate synthetic and real admission.
 
-No native imports, scheduling, retries, model endpoint, or mixed-row intake. The
-solver is re-executed with clean process state and exits before private staging.
+The solver is re-executed with clean process state and exits before private
+staging. Model/native imports remain inside admitted worker execution.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from ._contracts import ContractError, canonical_json, hex_digest, load_json_object
+from ._contracts import ContractError, canonical_json, canonical_sha256, hex_digest, load_json_object
 from .solver_task import SolverTask
 from .staging import stage_solver_assets
 from .verifier_task import VerifierTask
@@ -36,6 +36,10 @@ _COMMON_CODE = (
 )
 _VERIFIER_CODE = ("eval/verifier_worker.py", "eval/verifier_task.py", "eval/verifier_data.py",
                   "eval/runtime_verifier_fixture.py", "tools/harness_cert/_synthetic_verification.py")
+_REAL_COMMON_CODE = ("eval/real_contracts.py", "eval/runtime_real.py", "eval/runtime_provenance.py")
+_LINUX_LOCK = REPO_ROOT / "harness_cert/locks/harness_linux_x86_64_py312.lock"
+_LINUX_LOCK_SHA256 = "40c3b8a158eb4ab38289cfd3976759c7d2a5ceea6ddb91924f7121719d904c2d"
+_PREREGISTRATION = REPO_ROOT / "docs/experiments/DEV_E0_FORENSICS_V1_S1_PREREG.md"
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,12 +49,19 @@ class RuntimeConfig:
     candidate_path: Path
     artifact_root: Path
     source_wheels_root: Path | None = None
-    synthetic_case: str = "H05"
+    synthetic_case: str | None = "H05"
     mode: str = "native_scripted"
     observation_enabled: bool = True
     task_manifest_sha256: str = "UNKNOWN"
     sandbox_image: str = "UNKNOWN"
     worker_timeout_seconds: int = 120
+    model_endpoint: str = "SCRIPTED_ONLY"
+    budget: dict | None = None
+    compaction: dict | None = None
+    worker_user: str | None = None
+    preregistration_sha256: str = "UNKNOWN"
+    harness_lock_path: Path | None = None
+    worker_parent_root: Path | None = None
 
     def __post_init__(self):
         if type(self) is not RuntimeConfig:
@@ -62,11 +73,40 @@ class RuntimeConfig:
         if self.source_wheels_root is not None and (
                 not isinstance(self.source_wheels_root, Path) or not self.source_wheels_root.is_absolute()):
             raise ContractError("explicit source wheel root required")
-        if self.mode not in ("native_scripted", "isolation_probe") or self.synthetic_case not in CASES:
-            raise ContractError("only fixed synthetic execution is admitted")
+        if self.mode == "real_public":
+            from .real_contracts import normalize_endpoint, validate_budget, validate_compaction
+            from .runtime_linux import validate_worker_user
+            if self.synthetic_case is not None:
+                raise ContractError("real execution cannot receive a synthetic case")
+            normalize_endpoint(self.model_endpoint)
+            validate_budget(self.budget)
+            validate_compaction(self.compaction)
+            validate_worker_user(self.worker_user)
+            hex_digest(self.preregistration_sha256, "preregistration_sha256")
+            if self.source_wheels_root is None:
+                raise ContractError("real execution requires explicit native source wheels")
+            if self.harness_lock_path is not None and (not isinstance(self.harness_lock_path, Path)
+                    or not self.harness_lock_path.is_absolute() or ".." in self.harness_lock_path.parts):
+                raise ContractError("Linux lock requires an explicit absolute path")
+            if self.worker_parent_root is not None and (not isinstance(self.worker_parent_root, Path)
+                    or not self.worker_parent_root.is_absolute() or ".." in self.worker_parent_root.parts):
+                raise ContractError("worker parent requires an explicit absolute path")
+            with anchor_directory(self.candidate_path.parent) as fd:
+                observed = read_regular(fd, self.candidate_path.name, max_bytes=E0_SIZE,
+                                        include=False, reject_hardlinks=True)
+            if (observed.sha256, observed.size) != (E0_SHA256, E0_SIZE):
+                raise ContractError("only frozen E0 is admitted; other candidates require later candidate admission")
+        else:
+            if self.mode not in ("native_scripted", "isolation_probe") or self.synthetic_case not in CASES:
+                raise ContractError("only fixed synthetic execution is admitted")
+            if (self.model_endpoint != "SCRIPTED_ONLY" or self.budget is not None or self.compaction is not None
+                    or self.worker_user is not None or self.preregistration_sha256 != "UNKNOWN"
+                    or self.harness_lock_path is not None or self.worker_parent_root is not None):
+                raise ContractError("synthetic execution cannot receive real-runtime fields")
         if type(self.observation_enabled) is not bool:
             raise ContractError("observation_enabled must be bool")
-        if type(self.worker_timeout_seconds) is not int or not 1 <= self.worker_timeout_seconds <= 600:
+        ceiling = 3600 if self.mode == "real_public" else 600
+        if type(self.worker_timeout_seconds) is not int or not 1 <= self.worker_timeout_seconds <= ceiling:
             raise ContractError("invalid worker timeout")
         if self.task_manifest_sha256 != "UNKNOWN":
             hex_digest(self.task_manifest_sha256, "task_manifest_sha256")
@@ -118,10 +158,29 @@ def _copy_regular(source: Path, destination: Path, *, sha256: str | None = None,
         stream.write(observed.data)
 
 
-def _stage_code(root: Path, *, verifier: bool) -> None:
-    paths = (*_COMMON_CODE, *(_VERIFIER_CODE if verifier else ("eval/solver_worker.py",)))
+def _phase_code_paths(*, verifier: bool, real: bool = False) -> tuple[str, ...]:
+    return (*_COMMON_CODE, *(_REAL_COMMON_CODE if real else ()),
+            *(_VERIFIER_CODE if verifier else ("eval/solver_worker.py",)))
+
+
+def _stage_code(root: Path, *, verifier: bool, real: bool = False, source_records=None) -> None:
+    paths = _phase_code_paths(verifier=verifier, real=real)
+    if real:
+        _private_directory(root / "code")
     for relative in paths:
-        _copy_regular(REPO_ROOT / relative, root / "code" / relative)
+        if real:
+            parent = root / "code"
+            for component in Path(relative).parts[:-1]:
+                parent = parent / component
+                parent.mkdir(mode=0o700, exist_ok=True)
+                with anchor_directory(parent, private=True):
+                    pass
+        identity = source_records.get(relative) if real and source_records is not None else None
+        if real and identity is None:
+            raise ContractError("staged code lacks coordinator source identity")
+        _copy_regular(REPO_ROOT / relative, root / "code" / relative,
+                      sha256=identity["sha256"] if identity else None,
+                      size=identity["size_bytes"] if identity else None)
     if (root / "evidence").is_dir():
         records = []
         for relative in paths:
@@ -134,20 +193,27 @@ def _stage_code(root: Path, *, verifier: bool) -> None:
 
 def _stage_wheels(config: RuntimeConfig, root: Path) -> Path:
     target = root / "code/artifacts/harness_wheels/v28"
-    target.mkdir(mode=0o700, parents=True)
-    if config.mode == "native_scripted":
+    if config.mode == "real_public":
+        for path in (root / "code/artifacts", root / "code/artifacts/harness_wheels", target):
+            _private_directory(path)
+    else:
+        target.mkdir(mode=0o700, parents=True)
+    if config.mode in ("native_scripted", "real_public"):
         if config.source_wheels_root is None:
             raise ContractError("native source pins require explicit wheel root")
         # Existing source constants are stdlib-only; this does not import native code.
         from tools.harness_cert.run_h04_h05_h18 import WHEELS
         for name, digest in WHEELS.items():
             _copy_regular(config.source_wheels_root / name, target / name, sha256=digest)
+        if config.mode == "real_public":
+            _copy_regular(config.harness_lock_path or _LINUX_LOCK,
+                          target / _LINUX_LOCK.name, sha256=_LINUX_LOCK_SHA256)
     return target
 
 
-def worker_environment(root: Path) -> dict[str, str]:
+def worker_environment(root: Path, *, real: bool = False) -> dict[str, str]:
     """Construct from literals, never from os.environ or a secret-bearing parent."""
-    return {
+    environment = {
         "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(root / "home"),
         "TMPDIR": str(root / "tmp"), "HF_HOME": str(root / "hf_cache"),
         "KAGGLE_SANDBOX_DIR": str(root / "setup"), "PYTHONDONTWRITEBYTECODE": "1",
@@ -159,15 +225,29 @@ def worker_environment(root: Path) -> dict[str, str]:
         "OPENAI_API_KEY": "SYNTHETIC_DUMMY", "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_GLOBAL": os.devnull, "LANG": "C.UTF-8", "TZ": "UTC",
     }
+    if real:
+        environment["PATH"] = "/usr/bin:/bin"
+        environment.pop("OPENAI_API_KEY")
+        environment["KAGGLE_SANDBOX_DIR"] = str(root / "public/sandbox")
+    return environment
 
 
-def _prepare_worker(config: RuntimeConfig, task: SolverTask, public_root: Path, *, verifier: bool) -> tuple[Path, dict]:
+def _prepare_worker(config: RuntimeConfig, task: SolverTask, public_root: Path, *, verifier: bool,
+                    source_records=None) -> tuple[Path, dict]:
     # Independently unpredictable roots; verifier root does not exist while solving.
-    root = Path(tempfile.mkdtemp(prefix="gemma-runtime-", dir="/private/tmp"))
+    real = config.mode == "real_public"
+    parent = (config.worker_parent_root or Path("/tmp")) if real else Path("/private/tmp")
+    with anchor_directory(parent):
+        pass
+    root = Path(tempfile.mkdtemp(prefix="gemma-runtime-", dir=parent))
     try:
         for name in ("public", "evidence", "submission", "wheels", "setup", "home", "tmp", "hf_cache"):
             _private_directory(root / name)
-        _stage_code(root, verifier=verifier)
+        if real:
+            _refuse_secret_ancestors(root)
+            _stage_code(root, verifier=verifier, real=True, source_records=source_records)
+        else:
+            _stage_code(root, verifier=verifier)
         source_wheels = _stage_wheels(config, root)
         if config.mode == "native_scripted":
             # Native SubprocessManager selects its local wheel root before any
@@ -180,19 +260,66 @@ def _prepare_worker(config: RuntimeConfig, task: SolverTask, public_root: Path, 
         stage_solver_assets(task, public_root=public_root, staging_root=root / "public")
         _copy_regular(config.candidate_path, root / "submission/submission.zip", sha256=E0_SHA256, size=E0_SIZE)
         # Stops native import-time ancestor/secret discovery. It is not executed.
-        setup = root / "setup/setup.py"
-        setup.write_text("# Inert synthetic runtime setup.\n", encoding="utf-8")
-        setup.chmod(0o600)
+        if real:
+            _stage_public_support(public_root, root / "public")
+            wheels_root, setup_root = root / "public/wheels", root / "public/sandbox"
+        else:
+            setup = root / "setup/setup.py"
+            setup.write_text("# Inert synthetic runtime setup.\n", encoding="utf-8")
+            setup.chmod(0o600)
+            wheels_root, setup_root = root / "wheels", root / "setup"
         runtime = {"harness_root": str(config.harness_root), "public_root": str(root / "public"),
                    "worker_root": str(root), "evidence_root": str(root / "evidence"),
-                   "submission_root": str(root / "submission"), "wheels_root": str(root / "wheels"),
-                   "setup_root": str(root / "setup"), "sandbox": "subprocess", "image": config.sandbox_image,
-                   "model_endpoint": "SCRIPTED_ONLY", "source_wheels_root": str(source_wheels),
+                   "submission_root": str(root / "submission"), "wheels_root": str(wheels_root),
+                   "setup_root": str(setup_root), "sandbox": "subprocess",
+                   "image": "SUBPROCESS_NO_IMAGE" if real else config.sandbox_image,
+                   "model_endpoint": config.model_endpoint, "source_wheels_root": str(source_wheels),
                    "pytest_support_root": None}
+        if real:
+            runtime.update(budget=dict(config.budget), compaction=config.compaction,
+                           worker_user=config.worker_user, preregistration_sha256=config.preregistration_sha256)
+            from .runtime_linux import own_worker_root
+            own_worker_root(root, config.worker_user)
         return root, runtime
     except BaseException:
         shutil.rmtree(root)
         raise
+
+
+def _refuse_secret_ancestors(root: Path) -> None:
+    for ancestor in (root, *root.parents):
+        candidate = ancestor / "secret"
+        if candidate.exists() or candidate.is_symlink():
+            raise ContractError("real worker/public storage has a secret-discovery ancestor")
+
+
+def _stage_public_support(public_root: Path, destination: Path) -> None:
+    """Fresh copies of official setup/wheels; no dataset rows or Git injection."""
+    with anchor_directory(public_root / "wheels"):
+        pass
+    _private_directory(destination / "wheels")
+    _private_directory(destination / "sandbox")
+    for source in sorted((public_root / "wheels").rglob("*")):
+        target = destination / "wheels" / source.relative_to(public_root / "wheels")
+        if source.is_symlink():
+            raise ContractError("official wheel tree contains a symlink")
+        if source.is_dir():
+            _private_directory(target)
+        elif source.is_file():
+            with anchor_directory(source.parent) as fd:
+                observed = read_regular(fd, source.name, max_bytes=64 * 1024 * 1024,
+                                        include=True, reject_hardlinks=False)
+            with target.open("xb") as stream:
+                target.chmod(0o600)
+                stream.write(observed.data)
+        else:
+            raise ContractError("official wheel tree contains a non-regular entry")
+    _copy_regular(public_root / "sandbox/setup.py", destination / "sandbox/setup.py")
+
+
+def verify_worker_confinement(config: RuntimeConfig, roots: dict[str, Path]) -> dict:
+    from .runtime_linux import verify_worker_confinement as probe
+    return probe(config, roots)
 
 
 def _interpreter_roots(python_executable: Path, root: Path) -> tuple[Path, ...]:
@@ -216,13 +343,20 @@ _OS_READ_ROOTS = ("/usr", "/bin", "/sbin", "/System", "/Library",
                   "/private/var/db/timezone", "/private/var/db/dyld")
 
 
-def confined_worker_argv(python_executable: Path, root: Path, arguments: list[str]) -> list[str]:
+def confined_worker_argv(python_executable: Path, root: Path, arguments: list[str], *,
+                        config: RuntimeConfig | None = None) -> list[str]:
     """macOS OS confinement, inherited by native sandbox children. Fail closed.
 
     Directory metadata is readable for Python/dyld traversal; file contents and
     directory listings outside the explicit roots are denied. No verifier/source
     storage is admitted, even if its path is guessed by subprocess code.
     """
+    if __import__("sys").platform == "linux":
+        if config is None or config.mode != "real_public":
+            raise ContractError("Linux workers require explicit real admission and worker_user")
+        from .runtime_linux import linux_prefix
+        prefix, _ = linux_prefix(config.worker_user)
+        return [*prefix, str(python_executable), "-I", "-B", *arguments]
     if __import__("sys").platform != "darwin" or not Path("/usr/bin/sandbox-exec").is_file():
         raise ContractError("this synthetic runtime requires admitted macOS sandbox-exec confinement")
     libraries = [str(p) for p in _interpreter_roots(python_executable, root)]
@@ -248,13 +382,29 @@ def _execute_worker(config: RuntimeConfig, request: dict, root: Path, phase: str
     # -I and exec give macOS/Linux the same semantics: no forked Python heap,
     # cwd import, PYTHONPATH, user site, inherited environment or private FDs.
     bootstrap = "import sys; sys.path.insert(0, sys.argv[1]); from eval." + phase + "_worker import main; main()"
-    argv = confined_worker_argv(config.python_executable, root, ["-c", bootstrap, str(root / "code")])
-    seal_json(root / "evidence/worker_launch.json", {"argv": argv, "cwd": str(root),
-              "environment": worker_environment(root), "close_fds": True, "start_new_session": True})
+    real = config.mode == "real_public"
+    if real:
+        argv = confined_worker_argv(config.python_executable, root, ["-c", bootstrap, str(root / "code")], config=config)
+    else:
+        argv = confined_worker_argv(config.python_executable, root, ["-c", bootstrap, str(root / "code")])
+    environment = worker_environment(root, real=real)
+    launch = {"argv": argv, "cwd": str(root), "environment": environment,
+              "close_fds": True, "start_new_session": True}
+    if real:
+        from .runtime_provenance import sanitize_evidence
+        launch = sanitize_evidence(launch)
+        # The coordinator's late launch seal must be readable by the worker.
+        from .runtime_linux import worker_account
+        account = worker_account(config.worker_user)
+    seal_json(root / "evidence/worker_launch.json", launch)
+    if real:
+        os.chown(root / "evidence/worker_launch.json", account.pw_uid, account.pw_gid, follow_symlinks=False)
     log = root / "evidence/process.log"
     with log.open("xb") as output:
         log.chmod(0o600)
-        process = subprocess.Popen(argv, cwd=root, env=worker_environment(root), stdin=subprocess.PIPE,
+        if real:
+            os.chown(log, account.pw_uid, account.pw_gid, follow_symlinks=False)
+        process = subprocess.Popen(argv, cwd=root, env=environment, stdin=subprocess.PIPE,
                                    stdout=output, stderr=subprocess.STDOUT, close_fds=True,
                                    start_new_session=True)
         try:
@@ -262,7 +412,7 @@ def _execute_worker(config: RuntimeConfig, request: dict, root: Path, phase: str
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             process.communicate()
-            raise ContractError("synthetic worker timed out before sealing result") from None
+            raise ContractError("worker timed out before sealing result") from None
         finally:
             # Any surviving native sandbox descendants must terminate before
             # the coordinator reads evidence or stages private verifier bytes.
@@ -270,16 +420,40 @@ def _execute_worker(config: RuntimeConfig, request: dict, root: Path, phase: str
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+            if real:
+                from .runtime_linux import terminate_worker_descendants
+                try:
+                    terminate_worker_descendants(config.worker_user)
+                finally:
+                    output.flush()
+                    _sanitize_worker_log(log)
     # communicate waits/reaps the solver before any verifier staging or launch.
     if process.returncode != 0:
         raise ContractError(f"{phase} worker failed before sealing result; inspect preserved process.log")
-    with anchor_directory(root / "evidence", private=True) as fd:
+    with anchor_directory(root / "evidence", private=not real) as fd:
         observed = read_regular(fd, "result.json", max_bytes=16 * 1024 * 1024, include=True,
-                                reject_hardlinks=True, private=True)
+                                reject_hardlinks=True, private=not real)
     result = load_json_object(observed.data, "sealed worker result")
     if observed.data != canonical_json(result).encode("utf-8"):
         raise ContractError("sealed worker result must have canonical bytes")
     return result
+
+
+def _sanitize_worker_log(log: Path) -> None:
+    from .runtime_provenance import sanitize_evidence
+    with anchor_directory(log.parent) as fd:
+        observed = read_regular(fd, log.name, max_bytes=16 * 1024 * 1024,
+                                include=True, reject_hardlinks=True)
+    cleaned = sanitize_evidence(observed.data.decode("utf-8", errors="replace")).encode("utf-8")
+    fd = os.open(log, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb", closefd=False) as stream:
+            stream.write(cleaned)
+            stream.flush()
+            os.fsync(stream.fileno())
+    finally:
+        os.close(fd)
 
 
 def _result_reference(result) -> ArtifactRef:
@@ -287,7 +461,7 @@ def _result_reference(result) -> ArtifactRef:
     return ArtifactRef("result", "result.json", hashlib.sha256(raw).hexdigest(), len(raw))
 
 
-def _archive_phase(root: Path, destination: Path, artifacts=()) -> None:
+def _archive_phase(root: Path, destination: Path, artifacts=(), *, real: bool = False) -> None:
     if len({ref.relative_path for ref in artifacts}) != len(artifacts):
         raise ContractError("sealed evidence references contain duplicate paths")
     _private_directory(destination)
@@ -300,6 +474,31 @@ def _archive_phase(root: Path, destination: Path, artifacts=()) -> None:
         if path.is_dir():
             (destination / relative).mkdir(mode=0o700)
         else:
+            if real and relative.as_posix() == "process.log":
+                from .runtime_provenance import sanitize_evidence
+                with anchor_directory(path.parent) as descriptor:
+                    raw = read_regular(descriptor, path.name, max_bytes=16 * 1024 * 1024,
+                                       include=True, reject_hardlinks=True)
+                cleaned = sanitize_evidence(raw.data.decode("utf-8", errors="replace")).encode("utf-8")
+                with (destination / relative).open("xb") as stream:
+                    os.chmod(destination / relative, 0o600)
+                    stream.write(cleaned)
+                continue
+            if real and relative.as_posix() not in expected:
+                if not artifacts:
+                    # A failed worker did not seal its evidence inventory. Only
+                    # the sanitized process log can be exported as diagnostics.
+                    continue
+                raise ContractError("real worker evidence contains an unsealed artifact")
+            if real:
+                from .runtime_provenance import assert_secret_free
+                with anchor_directory(path.parent) as descriptor:
+                    raw = read_regular(descriptor, path.name, max_bytes=16 * 1024 * 1024,
+                                       include=True, reject_hardlinks=True)
+                if path.suffix == ".json":
+                    assert_secret_free(load_json_object(raw.data, "real evidence"))
+                else:
+                    assert_secret_free(raw.data.decode("utf-8", errors="replace"))
             ref = expected.pop(relative.as_posix(), None)
             _copy_regular(path, destination / relative, sha256=ref.sha256 if ref else None,
                           size=ref.size_bytes if ref else None)
@@ -307,9 +506,77 @@ def _archive_phase(root: Path, destination: Path, artifacts=()) -> None:
         raise ContractError("sealed evidence reference is missing")
 
 
+def _admit_real_task(solver_task, verifier_task, public_root, config) -> dict:
+    from .real_contracts import validate_public_task_identity
+    from .runtime_real import real_verification_config
+    if __import__("sys").platform != "linux":
+        raise ContractError("real public execution requires the admitted Linux runtime")
+    validate_public_task_identity(solver_task)
+    validate_public_task_identity(verifier_task)
+    if solver_task.graph is None or solver_task.embedding is None:
+        raise ContractError("real public task requires admitted graph and embedding identities")
+    if verifier_task.fail_to_pass is not None or verifier_task.pass_to_pass is not None:
+        raise ContractError("real public verifier cannot receive private node lists")
+    _refuse_secret_ancestors(public_root)
+    verification = real_verification_config(public_root, config.budget)
+    if canonical_sha256(verification) != verifier_task.verification_config_sha256:
+        raise ContractError("real verification configuration differs from task contract")
+    return verification
+
+
+def _real_provenance(solver_task, config, *, confinement) -> dict:
+    from .runtime_provenance import runtime_source_identity, runtime_source_records
+    from tools.common import tree_sha256
+    source = runtime_source_identity(REPO_ROOT)
+    records = runtime_source_records(REPO_ROOT)
+    if tree_sha256({path: value["sha256"] for path, value in records.items()}) != source["runtime_source_sha256"]:
+        raise ContractError("runtime source changed while its identity was captured")
+    with anchor_directory(_PREREGISTRATION.parent) as fd:
+        prereg = read_regular(fd, _PREREGISTRATION.name, include=False, reject_hardlinks=True)
+    if prereg.sha256 != config.preregistration_sha256:
+        raise ContractError("preregistration identity differs from admitted plan")
+    with anchor_directory((config.harness_lock_path or _LINUX_LOCK).parent) as fd:
+        lock = read_regular(fd, (config.harness_lock_path or _LINUX_LOCK).name,
+                            max_bytes=4 * 1024 * 1024, include=False, reject_hardlinks=True)
+    if lock.sha256 != _LINUX_LOCK_SHA256:
+        raise ContractError("Linux harness lock identity differs from admission")
+    hex_digest(config.task_manifest_sha256, "task_manifest_sha256")
+    return {"git_head": source["git_head"], "solver_contract_sha256": solver_task.sha256(),
+            "task_manifest_sha256": config.task_manifest_sha256,
+            "eval_infra_source_identity": source,
+            "candidate_identity": {"sha256": E0_SHA256, "size_bytes": E0_SIZE},
+            "preregistration_identity": {"sha256": prereg.sha256, "size_bytes": prereg.size},
+            "model_endpoint_identity": config.model_endpoint,
+            "public_identities": {"task_manifest_sha256": config.task_manifest_sha256,
+                                  **{key: getattr(solver_task, key).to_dict()
+                                     for key in ("snapshot", "graph", "embedding")}},
+            "harness_lock_sha256": lock.sha256, "confinement": confinement,
+            "runtime_sources": records,
+            "staged_source_paths": list(_phase_code_paths(verifier=False, real=True))}
+
+
+def _read_real_fingerprint(root: Path, result, provenance: dict, phase: str) -> dict:
+    from .runtime_provenance import IDENTITY_FIELDS, validate_real_fingerprint
+    refs = [ref for ref in result.artifacts if ref.relative_path == "real_fingerprint.json"]
+    if len(refs) != 1 or result.fingerprint is None:
+        raise ContractError("real phase is missing its mandatory sealed runtime fingerprint")
+    with anchor_directory(root / "evidence") as fd:
+        observed = read_regular(fd, "real_fingerprint.json", include=True, reject_hardlinks=True)
+    if (observed.sha256, observed.size) != (refs[0].sha256, refs[0].size_bytes):
+        raise ContractError("real phase fingerprint artifact seal mismatch")
+    value = load_json_object(observed.data, "real phase fingerprint")
+    if observed.data != canonical_json(value).encode():
+        raise ContractError("real phase fingerprint must have canonical bytes")
+    validate_real_fingerprint(value, phase=phase)
+    for key in (*IDENTITY_FIELDS, "public_identities", "harness_lock_sha256", "confinement"):
+        if value[key] != provenance[key]:
+            raise ContractError("real phase fingerprint differs from coordinator admission")
+    return value
+
+
 def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_root: Path,
              private_root: Path, test_patch_relative_path: str, config: RuntimeConfig) -> TaskRuntimeResult:
-    """Execute once, using returned patch only. Public/model runs fail admission."""
+    """Execute once, using native returned patch and a fresh verifier only."""
     if type(solver_task) is not SolverTask or type(verifier_task) is not VerifierTask or type(config) is not RuntimeConfig:
         raise ContractError("runtime requires exact admitted boundary types")
     solver_task.to_dict()
@@ -318,7 +585,10 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
     if ((solver_task.instance_id, solver_task.repo, solver_task.base_commit, solver_task.snapshot)
             != (verifier_task.instance_id, verifier_task.repo, verifier_task.base_commit, verifier_task.snapshot)):
         raise ContractError("solver/verifier task identity mismatch")
-    if solver_task.repo != "synthetic/probe" or not solver_task.instance_id.startswith("synthetic_"):
+    real = config.mode == "real_public"
+    if real:
+        verification = _admit_real_task(solver_task, verifier_task, public_root, config)
+    elif solver_task.repo != "synthetic/probe" or not solver_task.instance_id.startswith("synthetic_"):
         raise ContractError("public DEV execution requires independent audit and operator admission")
     with anchor_directory(public_root):
         pass
@@ -328,6 +598,8 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
         raise ContractError("evidence and source roots must be separate")
     if _overlap(private_root, config.artifact_root):
         raise ContractError("private source and runtime evidence roots must be separate")
+    if real and _overlap(public_root, private_root):
+        raise ContractError("public and private source roots must be separate")
     # Validate existing ancestors before creating ignored outputs.
     nearest = config.artifact_root
     while not nearest.exists():
@@ -346,14 +618,28 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
         pass
     run_root = config.artifact_root / uuid.uuid4().hex
     _private_directory(run_root)
+    if real:
+        seal_json(run_root / "run_identity.json", {"schema_version": 1,
+                  "task_id": solver_task.instance_id, "solver_contract_sha256": solver_task.sha256(),
+                  "preregistration_sha256": config.preregistration_sha256, "candidate_sha256": E0_SHA256})
     git_head = subprocess.run(["/usr/bin/git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True,
                               text=True, check=True, timeout=10).stdout.strip()
-    provenance = {"git_head": git_head, "solver_contract_sha256": solver_task.sha256(),
-                  "task_manifest_sha256": config.task_manifest_sha256}
+    if real:
+        confinement = verify_worker_confinement(config, {"public": public_root, "private": private_root,
+            "artifacts": config.artifact_root, "repository_git": REPO_ROOT / ".git"})
+        seal_json(run_root / "confinement.json", confinement)
+        provenance = _real_provenance(solver_task, config, confinement=confinement)
+    else:
+        provenance = {"git_head": git_head, "solver_contract_sha256": solver_task.sha256(),
+                      "task_manifest_sha256": config.task_manifest_sha256}
     common = {"schema_version": 1, "candidate": {"relative_path": "submission.zip", "sha256": E0_SHA256,
               "size_bytes": E0_SIZE}, "observation_enabled": config.observation_enabled,
               "synthetic_case": config.synthetic_case, "mode": config.mode, "provenance": provenance}
-    solver_root, runtime = _prepare_worker(config, solver_task, public_root, verifier=False)
+    if real:
+        solver_root, runtime = _prepare_worker(config, solver_task, public_root, verifier=False,
+                                                source_records=provenance["runtime_sources"])
+    else:
+        solver_root, runtime = _prepare_worker(config, solver_task, public_root, verifier=False)
     solver = None
     try:
         request = {**common, "task": solver_task.to_dict(), "runtime": runtime}
@@ -362,16 +648,25 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
             raise ContractError("sealed solver task identity mismatch")
         if solver.fingerprint.solver_contract_sha256 != solver_task.sha256() or solver.fingerprint.candidate_sha256 != E0_SHA256:
             raise ContractError("sealed solver provenance mismatch")
+        if real:
+            solver_fingerprint = _read_real_fingerprint(solver_root, solver, provenance, "solver")
     finally:
         try:
             refs = (*solver.artifacts, _result_reference(solver)) if solver else ()
-            _archive_phase(solver_root, run_root / "solver", refs)
+            if real:
+                _archive_phase(solver_root, run_root / "solver", refs, real=True)
+            else:
+                _archive_phase(solver_root, run_root / "solver", refs)
         finally:
             shutil.rmtree(solver_root)
     # Private bytes are first read here, after the solver process and root are gone.
     material = load_verifier_material(verifier_task, private_root=private_root,
                                       test_patch_relative_path=test_patch_relative_path)
-    verifier_root, runtime = _prepare_worker(config, solver_task, public_root, verifier=True)
+    if real:
+        verifier_root, runtime = _prepare_worker(config, solver_task, public_root, verifier=True,
+                                                  source_records=provenance["runtime_sources"])
+    else:
+        verifier_root, runtime = _prepare_worker(config, solver_task, public_root, verifier=True)
     verifier = None
     try:
         if config.mode == "native_scripted":
@@ -379,16 +674,30 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
             support = prepare_support(REPO_ROOT, verifier_root)
             runtime["pytest_support_root"] = support["root"]
             Path(support["root"]).chmod(0o700)
-        from .runtime_verifier_fixture import verification_config
+        if real:
+            verifier_config = verification
+        else:
+            from .runtime_verifier_fixture import verification_config
+            verifier_config = verification_config()
         request = {**common, "task": verifier_task.to_dict(), "runtime": runtime,
                    "returned_patch": solver.returned_patch, "returned_patch_sha256": solver.returned_patch_sha256,
                    "agent_error": solver.agent_error, "test_patch": material.test_patch,
-                   "verification_config": verification_config()}
+                   "verification_config": verifier_config}
+        if real:
+            request["provenance"] = {**provenance,
+                "staged_source_paths": list(_phase_code_paths(verifier=True, real=True))}
         verifier = VerifierRunResult.from_dict(_execute_worker(config, request, verifier_root, "verifier"))
+        if real:
+            verifier_fingerprint = _read_real_fingerprint(verifier_root, verifier, provenance, "verifier")
+            from .runtime_provenance import crosscheck_real_fingerprints
+            crosscheck_real_fingerprints(solver_fingerprint, verifier_fingerprint, expected=provenance)
     finally:
         try:
             refs = (*verifier.artifacts, _result_reference(verifier)) if verifier else ()
-            _archive_phase(verifier_root, run_root / "verifier", refs)
+            if real:
+                _archive_phase(verifier_root, run_root / "verifier", refs, real=True)
+            else:
+                _archive_phase(verifier_root, run_root / "verifier", refs)
         finally:
             shutil.rmtree(verifier_root)
     phase_refs = []
@@ -401,4 +710,85 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
     result = TaskRuntimeResult(1, solver_task.instance_id, solver, verifier, verifier.resolved,
                                artifacts=tuple(phase_refs), fingerprint=solver.fingerprint)
     seal_json(run_root / "task_result.json", result.to_dict())
+    return result
+
+
+def run_verifier_control(solver_task: SolverTask, verifier_task: VerifierTask, *, public_root: Path,
+                         private_root: Path, test_patch_relative_path: str, config: RuntimeConfig,
+                         returned_patch: str, control: str) -> dict:
+    """Verifier-only control; never fabricate a solver process or agent events."""
+    if (type(solver_task) is not SolverTask or type(verifier_task) is not VerifierTask
+            or type(config) is not RuntimeConfig or config.mode != "real_public"):
+        raise ContractError("verifier controls require exact real-public boundary types")
+    if control not in ("no_patch", "known_patch") or type(returned_patch) is not str:
+        raise ContractError("unknown verifier-only control")
+    if control == "no_patch" and returned_patch:
+        raise ContractError("no-patch control cannot receive a patch")
+    config.__post_init__()
+    solver_task.to_dict()
+    verifier_task.to_dict()
+    if ((solver_task.instance_id, solver_task.repo, solver_task.base_commit, solver_task.snapshot)
+            != (verifier_task.instance_id, verifier_task.repo, verifier_task.base_commit, verifier_task.snapshot)):
+        raise ContractError("control public/verifier identity mismatch")
+    verification = _admit_real_task(solver_task, verifier_task, public_root, config)
+    with anchor_directory(public_root):
+        pass
+    with anchor_directory(private_root, private=True):
+        pass
+    if any(_overlap(left, right) for left, right in ((public_root, private_root),
+            (public_root, config.artifact_root), (private_root, config.artifact_root))):
+        raise ContractError("control source, private, and artifact roots must be separate")
+    config.artifact_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with anchor_directory(config.artifact_root, private=True):
+        pass
+    run_root = config.artifact_root / uuid.uuid4().hex
+    _private_directory(run_root)
+    gold = control == "known_patch"
+    manifest = {"schema_version": 1, "role": "verifier_only_control", "control": control,
+                "task_id": solver_task.instance_id, "gold_assisted": gold, "solver_started": False,
+                "excluded_from_normal_reports": True, "excluded_from_candidate_comparison": True,
+                "excluded_from_designer_inspection": True, "excluded_from_solver_inspection": True}
+    seal_json(run_root / "run_manifest.json", manifest)
+    if gold:
+        seal_json(run_root / "GOLD_ASSISTED_VERIFIER_ONLY.json", manifest)
+    confinement = verify_worker_confinement(config, {"public": public_root, "private": private_root,
+        "artifacts": config.artifact_root, "repository_git": REPO_ROOT / ".git"})
+    seal_json(run_root / "confinement.json", confinement)
+    provenance = _real_provenance(solver_task, config, confinement=confinement)
+    provenance["staged_source_paths"] = list(_phase_code_paths(verifier=True, real=True))
+    material = load_verifier_material(verifier_task, private_root=private_root,
+                                      test_patch_relative_path=test_patch_relative_path)
+    root, runtime = _prepare_worker(config, solver_task, public_root, verifier=True,
+                                    source_records=provenance["runtime_sources"])
+    verifier = None
+    try:
+        from .worker_common import patch_sha256
+        request = {"schema_version": 1, "candidate": {"relative_path": "submission.zip",
+                    "sha256": E0_SHA256, "size_bytes": E0_SIZE}, "mode": "real_public",
+                   "synthetic_case": None, "observation_enabled": config.observation_enabled,
+                   "provenance": provenance, "task": verifier_task.to_dict(), "runtime": runtime,
+                   "returned_patch": returned_patch, "returned_patch_sha256": patch_sha256(returned_patch),
+                   "agent_error": None, "test_patch": material.test_patch, "verification_config": verification}
+        verifier = VerifierRunResult.from_dict(_execute_worker(config, request, root, "verifier"))
+        if verifier.task_id != solver_task.instance_id or verifier.returned_patch_sha256 != patch_sha256(returned_patch):
+            raise ContractError("control result did not consume the authoritative control patch")
+        _read_real_fingerprint(root, verifier, provenance, "verifier")
+    finally:
+        try:
+            refs = (*verifier.artifacts, _result_reference(verifier)) if verifier else ()
+            _archive_phase(root, run_root / "verifier", refs, real=True)
+        finally:
+            shutil.rmtree(root)
+    observations = {}
+    native_path = run_root / "verifier/native_observation.json"
+    if native_path.exists():
+        with anchor_directory(native_path.parent, private=True) as fd:
+            raw = read_regular(fd, native_path.name, include=True, reject_hardlinks=True, private=True)
+        native = load_json_object(raw.data, "control native observations")
+        observations = {key: native.get(key) for key in ("apply_status", "apply_error", "required_tests_passed", "test_exit_code")}
+    result = {"schema_version": 1, "control": control, "task_id": solver_task.instance_id,
+              "verifier_result": verifier.to_dict(), "resolved": verifier.resolved,
+              "run_root": str(run_root), "gold_assisted": gold, "solver_started": False,
+              "verification_observations": observations}
+    seal_json(run_root / "control_result.json", result)
     return result
