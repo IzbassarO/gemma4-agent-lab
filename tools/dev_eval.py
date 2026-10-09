@@ -25,7 +25,7 @@ import sys
 import tarfile
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 
-from eval._contracts import ContractError, canonical_json
+from eval._contracts import ContractError, canonical_json, hex_digest
 from eval.failure_taxonomy import Failure
 from eval.manifests import SCREEN_PATH, SPLIT_PATH, TASKS_SHA256
 from tools.common import REPO_ROOT, WriteGuard, iter_files, scan_tree
@@ -194,15 +194,20 @@ def _file_identity(path):
 def capture_fingerprint(*, repo_root, candidate, prereg, public_root, endpoint,
                         python_executable, harness_lock, model_path, allow_dirty=False,
                         server_observer=observe_model_server, harness_observer=observe_harness,
-                        gpu_observer=observe_gpu, vllm_version=None, now=_now):
+                        gpu_observer=observe_gpu, vllm_version=None, now=_now,
+                        supplement_root=None, supplement_manifest_sha256=None):
     from eval.runtime_provenance import build_real_fingerprint
     from eval.runtime_real import validate_candidate
     from eval.real_contracts import normalize_endpoint
     normalize_endpoint(endpoint)
+    supplement_identity = _dependency_supplement_identity(public_root, supplement_root,
+                                                        supplement_manifest_sha256)
     validate_candidate(candidate)
     identities = {"tasks": _file_identity(public_root / "tasks.jsonl"),
                   "screen": _file_identity(repo_root / "eval/splits/screens_v1.json"),
                   "split": _file_identity(repo_root / "eval/splits/v1.json")}
+    if supplement_identity is not None:
+        identities["dependency_supplement"] = supplement_identity
     if identities["tasks"]["sha256"] != TASKS_SHA256:
         raise ContractError("frozen public dataset identity mismatch")
     if (identities["screen"]["sha256"] != "a6bdb7e9f99c3cbfd59be4130884c3dadcd99d4cfb6a91260bbfcdb1f71832f7"
@@ -225,6 +230,20 @@ def capture_fingerprint(*, repo_root, candidate, prereg, public_root, endpoint,
                         "gpu": gpu_observer(), "model_weights": weights,
                         "seed_forwarding": "unsupported", "tp": 1, "max_model_len": 32768})
     return fingerprint
+
+
+def _dependency_supplement_identity(public_root, supplement_root, manifest_sha256):
+    if (supplement_root is None) != (manifest_sha256 is None):
+        raise ContractError("dependency supplement requires both root and manifest identity")
+    if supplement_root is None:
+        return None
+    hex_digest(manifest_sha256, "supplement_manifest_sha256")
+    if (not isinstance(supplement_root, Path) or not supplement_root.is_absolute()
+            or ".." in supplement_root.parts):
+        raise ContractError("dependency supplement requires an explicit absolute path")
+    from eval.runtime_supplement import validate_supplement
+    return validate_supplement(supplement_root, manifest_sha256,
+                               original_wheels_root=public_root / "wheels")
 
 
 def validate_fingerprint(fingerprint, expected, *, now=None):
@@ -306,19 +325,20 @@ def admit_disk_space(roots, footprint, *, disk_usage=shutil.disk_usage, device=N
             "filesystems": rows}
 
 
-def measure_footprint(*, model, public, private, harness, vllm, tasks, candidate):
+def measure_footprint(*, model, public, private, harness, vllm, tasks, candidate, supplement_root=None):
     expanded = []
     for task in tasks:
         with tarfile.open(public / task.snapshot.source_relative_path, "r:*") as archive:
             expanded.append(sum(member.size for member in archive if member.isfile()))
     public_bytes = _size(public)
+    supplement_bytes = _size(supplement_root) if supplement_root is not None else 0
     private_bound = (public / "tasks.jsonl").stat().st_size + sum(
         len(canonical_json(task.to_dict()).encode()) for task in tasks)
     return {"model": _size(model), "public": public_bytes,
             "private": max(_size(private) if private.exists() else 0, private_bound),
             "harness": _size(harness), "vllm": _size(vllm),
-            "worker": max(expanded, default=0) + public_bytes + candidate.stat().st_size,
-            "export": public_bytes + candidate.stat().st_size}
+            "worker": max(expanded, default=0) + public_bytes + supplement_bytes + candidate.stat().st_size,
+            "export": public_bytes + supplement_bytes + candidate.stat().st_size}
 
 
 def build_serve_argv(*, candidate, model_path, vllm_root, out, guard,
@@ -371,14 +391,36 @@ def build_serve_argv(*, candidate, model_path, vllm_root, out, guard,
 
 
 def control_passes(control, result):
-    """Exact preregistered criteria; unknown evidence never passes no-patch."""
-    if control == "known_patch":
-        return result.get("resolved") is True
-    if control != "no_patch" or result.get("resolved") is not False:
+    """Apply frozen criteria after execution or a proven repository failure."""
+    observations = result.get("verification_observations", {})
+    execution = observations.get("test_execution") if type(observations) is dict else None
+    execution_fields = {"status", "reason", "command_exit_code", "junit_test_count",
+                        "required_test_count", "required_tests_executed"}
+    if (type(execution) is not dict or set(execution) != execution_fields
+            or type(execution["command_exit_code"]) is not int
+            or type(execution["junit_test_count"]) is not int or execution["junit_test_count"] <= 0
+            or type(execution["required_test_count"]) is not int or execution["required_test_count"] < 0):
+        return False
+    repository_failure = execution["status"] == "repository_failure"
+    if repository_failure:
+        if (control != "no_patch" or execution["reason"] != "repository_collection_or_setup_failure"
+                or execution["required_tests_executed"] is not False
+                or execution["command_exit_code"] not in (1, 2)):
+            return False
+    elif (execution["status"] != "executed" or execution["reason"] is not None
+          or execution["required_tests_executed"] is not True or execution["command_exit_code"] not in (0, 1)):
         return False
     verifier = result.get("verifier_result", {})
     native = json.loads(verifier["native_result_json"]) if verifier.get("native_result_json") else {}
-    observations = result.get("verification_observations", {})
+    observed_exit = native.get("test_exit_code", native.get("exit_code"))
+    if repository_failure and (native.get("resolved") is not False or observed_exit != execution["command_exit_code"]):
+        return False
+    if observed_exit is not None and (type(observed_exit) is not int or observed_exit != execution["command_exit_code"]):
+        return False
+    if control == "known_patch":
+        return result.get("resolved") is True and execution["command_exit_code"] == 0
+    if control != "no_patch" or result.get("resolved") is not False:
+        return False
     apply_status = observations.get("apply_status", native.get("patch_applied"))
     apply_error = observations.get("apply_error", native.get("apply_error"))
     # Native public TaskResult uses patch_applied and test_results; both must
@@ -406,6 +448,9 @@ def _control_observations(result, expected=None):
         for key in ("eval_infra_source_identity", "candidate_identity", "preregistration_identity", "model_endpoint_identity"):
             if phase_fingerprint[key] != expected[key]:
                 raise ContractError("control fingerprint disagrees with driver")
+        if (phase_fingerprint["public_identities"].get("dependency_supplement")
+                != expected["public_identities"].get("dependency_supplement")):
+            raise ContractError("control dependency supplement disagrees with driver")
     if (root / "solver").exists() or result.get("solver_started") is not False:
         raise ContractError("verifier control cannot contain solver execution evidence")
     for ref in verifier.artifacts:
@@ -579,6 +624,9 @@ def validate_task_seal(seal, artifact_root, fingerprint):
         for key in ("eval_infra_source_identity", "candidate_identity", "preregistration_identity", "model_endpoint_identity"):
             if fp.get(key) != fingerprint.get(key):
                 raise ContractError("task fingerprint disagrees with driver")
+        if (fp["public_identities"].get("dependency_supplement")
+                != fingerprint["public_identities"].get("dependency_supplement")):
+            raise ContractError("task dependency supplement disagrees with driver")
     return result
 
 
@@ -932,6 +980,10 @@ def forensic_record(task_id, *, index, result=None, repo=None, base_commit=None,
             primary = Failure.TOOL_BUDGET_EXHAUSTED.value
         elif solver.returned_patch == "":
             primary = Failure.NO_PATCH.value
+    if (primary in (Failure.UNKNOWN.value, Failure.NO_PATCH.value)
+            and verifier is not None and verifier.runtime_status == "error" and verifier.resolved is None
+            and (verifier.error or "").startswith("verification infrastructure error: ")):
+        primary = Failure.ENVIRONMENT_VERIFICATION_ARTIFACT.value
     reason = ("started without trustworthy sealed result" if started else "not started") if result is None else "not exposed by sealed native observation; manual review required"
     unknown = {"value": None, "reason": reason}
     return {"identity": {"experiment": EXPERIMENT, "instance_id": task_id, "repo": repo,
@@ -981,7 +1033,9 @@ def _enrich_record(record, result, run_root):
     escaped = result.solver_result.escaped_exception or ""
     if result.resolved is not True:
         category = None
-        if "ServerStartupError:" in escaped:
+        if solver.get("manager", {}).get("setup_error") is not None:
+            category = Failure.ENVIRONMENT_VERIFICATION_ARTIFACT.value
+        elif "ServerStartupError:" in escaped:
             category = Failure.MODEL_SERVER_START_FAILURE.value
         elif any(name + ":" in escaped for name in ("SubmissionValidationError", "SubmissionCompilationError", "ToolNotFoundError")):
             category = Failure.HARNESS_COMPILE_VALIDATION.value
@@ -1007,9 +1061,15 @@ def _enrich_record(record, result, run_root):
     commands = solver.get("manager", {}).get("commands")
     if type(commands) is list:
         record["tests"]["commands"] = {"value": [{"artifact": (run_root / "solver/native_observations.json").name,
-                                                    "command_index": index} for index, _ in enumerate(commands)],
+                                                    "command_index": index} for index, entry in enumerate(commands)
+                                                    if entry.get("purpose") == "native_test" or
+                                                    (entry.get("purpose") != "dependency_setup" and
+                                                     re.search(r"\b(?:pytest|unittest)\b", entry.get("command", "")))],
                                           "reason": "command text retained in sealed public solver evidence"}
-        record["tests"]["exit_codes"] = {"value": [entry.get("exit_code") for entry in commands], "reason": None}
+        record["tests"]["exit_codes"] = {"value": [entry.get("exit_code") for entry in commands
+                                                        if entry.get("purpose") == "native_test" or
+                                                        (entry.get("purpose") != "dependency_setup" and
+                                                         re.search(r"\b(?:pytest|unittest)\b", entry.get("command", "")))], "reason": None}
     trace = observed("solver", "native_trace.json")
     entries = trace.get("entries")
     if type(entries) is list and entries:
@@ -1106,6 +1166,8 @@ def _parser():
                 command.add_argument("--" + flag, type=Path, required=True)
             command.add_argument("--endpoint", required=True)
             command.add_argument("--allow-dirty", action="store_true")
+            command.add_argument("--supplement-root", type=Path)
+            command.add_argument("--supplement-manifest-sha256")
         if name == "fingerprint":
             command.add_argument("--out", type=Path, required=True)
         elif name == "serve-argv":
@@ -1162,7 +1224,9 @@ def main(argv=None):
     current = capture_fingerprint(repo_root=REPO_ROOT, candidate=args.candidate, prereg=args.prereg,
                                   public_root=args.public_root, endpoint=args.endpoint,
                                   python_executable=args.harness_python, harness_lock=args.harness_lock,
-                                  model_path=args.model_path, allow_dirty=args.allow_dirty, vllm_version=vllm_version)
+                                  model_path=args.model_path, allow_dirty=args.allow_dirty, vllm_version=vllm_version,
+                                  supplement_root=args.supplement_root,
+                                  supplement_manifest_sha256=args.supplement_manifest_sha256)
     if args.command == "fingerprint":
         _write(args.out / "fingerprint.json", current, guard)
         return 0
@@ -1184,7 +1248,8 @@ def main(argv=None):
     private_parent.chmod(0o700)
     private_root = private_parent / ("control_" + args.control if args.command == "preflight" else "S1")
     footprint = measure_footprint(model=args.model_path, public=args.public_root, private=private_root,
-                                  harness=args.harness_root, vllm=args.vllm_root, tasks=tasks, candidate=args.candidate)
+                                  harness=args.harness_root, vllm=args.vllm_root, tasks=tasks, candidate=args.candidate,
+                                  supplement_root=args.supplement_root)
     footprint["artifact"] = footprint["export"] * 2
     disk = admit_disk_space({"model": args.model_path, "public": args.public_root, "private": args.private_root,
                             "harness": args.harness_root, "vllm": args.vllm_root, "worker": args.worker_root,
@@ -1198,7 +1263,9 @@ def main(argv=None):
                            worker_user=args.worker_user, preregistration_sha256=current["preregistration_identity"]["sha256"],
                            task_manifest_sha256=screening.sha256, harness_lock_path=args.harness_lock,
                            worker_parent_root=args.worker_root,
-                           worker_timeout_seconds=args.worker_timeout_seconds)
+                           worker_timeout_seconds=args.worker_timeout_seconds,
+                           supplement_root=args.supplement_root,
+                           supplement_manifest_sha256=args.supplement_manifest_sha256)
     ids = CONTROL_IDS if args.command == "preflight" else S1_IDS
     if args.command == "preflight" and tuple(args.task_ids) != CONTROL_IDS:
         raise ContractError("preflight task IDs must match frozen preregistration order")

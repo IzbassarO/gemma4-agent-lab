@@ -160,6 +160,12 @@ def test_disk_missing_role_refused(setup):
         driver.admit_disk_space({"model": public}, {"model": 1})
 
 
+def _test_execution_receipt(*, exit_code=1, **changes):
+    return {"status": "executed", "reason": None, "command_exit_code": exit_code,
+            "junit_test_count": 2, "required_test_count": 1, "required_tests_executed": True,
+            **changes}
+
+
 @pytest.mark.parametrize("control,resolved,apply,exit_code,passed", [
     ("known_patch", True, None, None, True), ("known_patch", False, None, None, False),
     ("no_patch", False, "not_needed", 1, True), ("no_patch", False, "UNKNOWN", 1, False),
@@ -167,9 +173,120 @@ def test_disk_missing_role_refused(setup):
     ("no_patch", False, "not_needed", None, False),
 ])
 def test_exact_control_criteria(control, resolved, apply, exit_code, passed):
-    result = {"resolved": resolved, "verification_observations": {"apply_status": apply, "apply_error": None},
+    result = {"resolved": resolved, "verification_observations": {
+              "apply_status": apply, "apply_error": None,
+              "test_execution": _test_execution_receipt(exit_code=0 if control == "known_patch" else 1)},
               "verifier_result": {"native_result_json": canonical_json({"test_exit_code": exit_code})}}
     assert driver.control_passes(control, result) is passed
+
+
+def test_no_patch_control_rejects_missing_pytest_infrastructure_failure():
+    result = {"resolved": False, "verification_observations": {
+        "apply_status": "not_needed", "apply_error": None, "required_tests_passed": False,
+        "test_execution": _test_execution_receipt(status="infrastructure_error", reason="PYTEST_UNAVAILABLE",
+                                                   junit_test_count=0, required_tests_executed=False)},
+        "verifier_result": {"native_result_json": canonical_json({
+            "resolved": False, "test_exit_code": 1,
+            "test_output": "STDOUT:\n\nSTDERR:\n/fixture/bin/python3: No module named pytest\n"})}}
+    assert driver.control_passes("no_patch", result) is False
+
+
+@pytest.mark.parametrize("exit_code", [1, 2])
+def test_no_patch_control_accepts_proven_repository_failure_without_claiming_test_bodies_ran(exit_code):
+    result = {"resolved": False, "verification_observations": {
+        "apply_status": "not_needed", "apply_error": None, "required_tests_passed": False,
+        "test_execution": _test_execution_receipt(exit_code=exit_code, status="repository_failure",
+            reason="repository_collection_or_setup_failure", required_tests_executed=False, required_test_count=0)},
+        "verifier_result": {"native_result_json": canonical_json({"resolved": False, "test_exit_code": exit_code})}}
+    assert driver.control_passes("no_patch", result) is True
+    assert driver.control_passes("known_patch", result) is False
+
+
+@pytest.mark.parametrize("receipt_change,native", [
+    ({"reason": None}, {"resolved": False, "test_exit_code": 2}),
+    ({"required_tests_executed": True}, {"resolved": False, "test_exit_code": 2}),
+    ({"command_exit_code": 0}, {"resolved": False, "test_exit_code": 0}),
+    ({}, {"resolved": True, "test_exit_code": 2}),
+    ({}, {"test_exit_code": 2}),
+    ({}, {"resolved": False, "test_exit_code": 1}),
+    ({}, {"resolved": False}),
+])
+def test_repository_failure_control_requires_unresolved_matching_native_result(receipt_change, native):
+    receipt = _test_execution_receipt(exit_code=2, status="repository_failure",
+        reason="repository_collection_or_setup_failure", required_tests_executed=False)
+    receipt.update(receipt_change)
+    result = {"resolved": False, "verification_observations": {
+        "apply_status": "not_needed", "apply_error": None, "required_tests_passed": False,
+        "test_execution": receipt},
+        "verifier_result": {"native_result_json": canonical_json(native)}}
+    assert driver.control_passes("no_patch", result) is False
+
+
+@pytest.mark.parametrize("reason", ["EXPECTED_PYTEST_INVOCATION_MISSING", "PYTEST_TARGET_MISMATCH"])
+def test_no_patch_control_requires_expected_test_invocation_execution(reason):
+    result = {"resolved": False, "verification_observations": {
+        "apply_status": "not_needed", "apply_error": None, "required_tests_passed": False,
+        "test_execution": _test_execution_receipt(status="infrastructure_error", reason=reason,
+                                                   required_tests_executed=False)},
+        "verifier_result": {"native_result_json": canonical_json({"test_exit_code": 1})}}
+    assert driver.control_passes("no_patch", result) is False
+
+
+@pytest.mark.parametrize("control", ["no_patch", "known_patch"])
+@pytest.mark.parametrize("receipt", [None, {}, _test_execution_receipt(junit_test_count=0),
+                                    _test_execution_receipt(required_tests_executed=False),
+                                    _test_execution_receipt(exit_code=5),
+                                    _test_execution_receipt(status="infrastructure_error", reason="MALFORMED_JUNIT")])
+def test_controls_require_nonvacuous_test_execution_evidence(control, receipt):
+    result = {"resolved": control == "known_patch", "verification_observations": {
+        "apply_status": "not_needed", "apply_error": None, "required_tests_passed": control == "known_patch",
+        "test_execution": receipt},
+        "verifier_result": {"native_result_json": canonical_json({
+            "test_exit_code": 0 if control == "known_patch" else 1})}}
+    assert driver.control_passes(control, result) is False
+
+
+@pytest.mark.parametrize("changes", [{"command_exit_code": True}, {"junit_test_count": True},
+                                    {"required_test_count": -1}, {"unexpected": "field"}])
+def test_control_execution_receipt_refuses_malformed_counts_and_fields(changes):
+    result = {"resolved": False, "verification_observations": {
+        "apply_status": "not_needed", "apply_error": None,
+        "test_execution": _test_execution_receipt(**changes)},
+        "verifier_result": {"native_result_json": canonical_json({"test_exit_code": 1})}}
+    assert driver.control_passes("no_patch", result) is False
+
+
+@pytest.mark.parametrize("control,native_exit,command_exit", [
+    ("known_patch", 1, 1), ("known_patch", 0, 1),
+    ("no_patch", 1, 0), ("no_patch", 2, 1), ("no_patch", True, 1),
+])
+def test_control_execution_receipt_rejects_contradictory_native_exit(control, native_exit, command_exit):
+    result = {"resolved": control == "known_patch", "verification_observations": {
+        "apply_status": "not_needed", "apply_error": None, "required_tests_passed": control == "known_patch",
+        "test_execution": _test_execution_receipt(exit_code=command_exit)},
+        "verifier_result": {"native_result_json": canonical_json({"test_exit_code": native_exit})}}
+    assert driver.control_passes(control, result) is False
+
+
+def test_control_execution_receipt_requires_sealed_native_observation_artifact(setup):
+    from eval.runtime_provenance import FINGERPRINT_FIELDS
+    _, root, _, fp = setup
+    run_root = root / "control_fixture"
+    phase_fp = {key: fp[key] for key in FINGERPRINT_FIELDS}
+    phase_fp["phase"] = "verifier"
+    _raw_write(run_root / "verifier/real_fingerprint.json", phase_fp)
+    info = driver._file_identity(run_root / "verifier/real_fingerprint.json")
+    ref = ArtifactRef("fingerprint", "real_fingerprint.json", info["sha256"], info["size_bytes"])
+    verifier = VerifierRunResult(1, driver.CONTROL_IDS[0], "completed", patch_sha256(""), False,
+                                 native_result_json=canonical_json({"test_exit_code": 1}),
+                                 artifacts=(ref,), fingerprint=RuntimeFingerprint())
+    result = {"run_root": str(run_root), "solver_started": False, "resolved": False,
+              "verifier_result": verifier.to_dict(), "verification_observations": {
+                  "apply_status": "not_needed", "apply_error": None,
+                  "test_execution": _test_execution_receipt()}}
+    observed = driver._control_observations(result, fp)
+    assert observed["verification_observations"] == {}
+    assert driver.control_passes("no_patch", observed) is False
 
 
 def test_phase_fingerprints_mandatory_and_crosschecked(setup):
@@ -245,6 +362,30 @@ def test_unknown_remains_null_and_unknown(setup):
     assert record["forensics"]["primary"] == "UNKNOWN"
     resolved = replace(result, verifier_result=replace(result.verifier_result, resolved=True), resolved=True)
     assert driver.forensic_record(result.task_id, index=0, result=resolved)["forensics"]["primary"] is None
+
+
+@pytest.mark.parametrize("solver_failure,expected", [(None, "ENVIRONMENT_VERIFICATION_ARTIFACT"),
+                                                    ("timeout", "AGENT_TIMEOUT"),
+                                                    ("budget_exhausted", "TOOL_BUDGET_EXHAUSTED")])
+def test_verifier_infrastructure_failure_is_not_empty_patch_agent_quality(setup, solver_failure, expected):
+    _, root, _, fp = setup
+    result = _sealed_result(root, driver.S1_IDS[0], fp, patch="")
+    solver = replace(result.solver_result, **({solver_failure: True} if solver_failure else {}))
+    verifier = replace(result.verifier_result, runtime_status="error", resolved=None,
+                       error="verification infrastructure error: missing_or_empty_junit")
+    observed = replace(result, solver_result=solver, verifier_result=verifier, resolved=None)
+    record = driver.forensic_record(observed.task_id, index=0, result=observed)
+    assert record["forensics"]["primary"] == expected
+    assert record["outcome"]["resolved"] is None
+
+
+def test_generic_verifier_error_is_not_guessed_to_be_infrastructure(setup):
+    _, root, _, fp = setup
+    result = _sealed_result(root, driver.S1_IDS[0], fp, patch="")
+    verifier = replace(result.verifier_result, runtime_status="error", resolved=None, error="unspecified error")
+    observed = replace(result, verifier_result=verifier, resolved=None)
+    record = driver.forensic_record(observed.task_id, index=0, result=observed)
+    assert record["forensics"]["primary"] == "NO_PATCH"
 
 
 def test_s1_only_and_attempt_contract(setup):
@@ -422,7 +563,8 @@ def test_all_eight_controls_sealed_gold_exclusion_and_no_solver(setup):
         _raw_write(run_root / "verifier/real_fingerprint.json", phase_fp)
         _raw_write(run_root / "verifier/native_observations.json", {
             "apply_status": "not_needed" if control == "no_patch" else "applied",
-            "apply_error": None, "required_tests_passed": control == "known_patch"})
+            "apply_error": None, "required_tests_passed": control == "known_patch",
+            "test_execution": _test_execution_receipt(exit_code=0 if control == "known_patch" else 1)})
         refs = []
         for filename in ("real_fingerprint.json", "native_observations.json"):
             info = driver._file_identity(run_root / "verifier" / filename)
@@ -925,3 +1067,24 @@ def test_real_s1_cli_requires_explicit_3600_infrastructure_timeout():
     from eval.real_contracts import FROZEN_BUDGET
     assert FROZEN_BUDGET == {"time_minutes": 1.0, "tool_calls": 10, "turns": 50,
                              "command_timeout_seconds": 60}
+
+
+def test_solver_dependency_setup_is_environment_failure_and_not_test_execution(setup):
+    _, root, _, fingerprint = setup
+    result = _sealed_result(root, driver.S1_IDS[0], fingerprint)
+    run_root = root / (result.task_id + "_run")
+    path = run_root / "solver/native_observations.json"
+    _raw_write(path, {"manager": {
+        "setup_error": {"phase": "dependency provisioning", "exception_type": "RealAdmissionError"},
+        "commands": [{"purpose": "dependency_setup", "command": "python3 -I -m pytest --version", "exit_code": 0},
+                     {"purpose": "native_test", "command": "python3 -m pytest test_public_fixture.py", "exit_code": 1},
+                     {"purpose": "native", "command": "git diff --binary", "exit_code": 0}]}})
+    identity = driver._file_identity(path)
+    reference = ArtifactRef("native_observations", path.name, identity["sha256"], identity["size_bytes"])
+    result = replace(result, solver_result=replace(result.solver_result, runtime_status="worker_error",
+                     escaped_exception="eval.runtime_real.RealAdmissionError: sandbox dependency setup failed",
+                     artifacts=(*result.solver_result.artifacts, reference)))
+    record = driver._enrich_record(driver.forensic_record(result.task_id, index=0, result=result), result, run_root)
+    assert record["forensics"]["primary"] == "ENVIRONMENT_VERIFICATION_ARTIFACT"
+    assert record["tests"]["commands"]["value"] == [{"artifact": path.name, "command_index": 1}]
+    assert record["tests"]["exit_codes"]["value"] == [1]

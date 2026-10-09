@@ -20,6 +20,7 @@ from pathlib import Path, PurePosixPath
 import platform
 import posixpath
 import re
+import shlex
 import stat
 import sys
 import sysconfig
@@ -255,6 +256,253 @@ def real_verification_config(public_root: Path, budget: dict) -> dict:
             "wheels_tree_sha256": tree_sha256(_tree(public_root / "wheels"))}
 
 
+def _support_identity(paths: dict) -> dict:
+    return {"setup_py_sha256": _sha(_read(paths["setup_root"] / "setup.py")),
+            "wheels_tree_sha256": tree_sha256(_tree(paths["wheels_root"]))}
+
+
+def _sandbox_paths(manager, identifier, paths):
+    sandbox = manager.sandboxes[identifier]
+    root = sandbox["root"]
+    if root.resolve() != root or not root.is_relative_to(paths["worker_root"] / "sandboxes"):
+        raise RealAdmissionError("task sandbox escaped its admitted worker root")
+    for key in ("workspace", "tmp", "wheels", "venv"):
+        if sandbox[key].resolve() != sandbox[key] or not sandbox[key].is_relative_to(root):
+            raise RealAdmissionError("task dependency path escaped its sandbox")
+    return sandbox
+
+
+def _mount_public_wheels(manager, identifier, paths, expected_identity):
+    """Populate top-level /wheels before native exec can use host fallbacks."""
+    if _support_identity(paths) != expected_identity:
+        raise RealAdmissionError("public support differs from coordinator authority")
+    sandbox = _sandbox_paths(manager, identifier, paths)
+    hashes = _tree(paths["wheels_root"])
+    if any("/" in name or not name.endswith(".whl") for name in hashes):
+        raise RealAdmissionError("public wheelhouse must contain only top-level wheels")
+    for name, expected in hashes.items():
+        content = _read(paths["wheels_root"] / name, maximum=256 * 1024 * 1024)
+        if _sha(content) != expected:
+            raise RealAdmissionError("public wheel changed while mounting")
+        with anchor_directory(sandbox["wheels"]) as fd:
+            out = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+            with os.fdopen(out, "wb") as stream:
+                stream.write(content)
+    if (_support_identity(paths) != expected_identity
+            or tree_sha256(_tree(sandbox["wheels"])) != expected_identity["wheels_tree_sha256"]):
+        raise RealAdmissionError("mounted wheels differ from public authority")
+    if paths.get("supplement_root") is not None:
+        from .runtime_supplement import stage_supplement
+        expected = paths["supplement_identity"]
+        identity = stage_supplement(paths["supplement_root"], sandbox["root"] / "dependency_supplement",
+                                    expected["manifest_sha256"], original_wheels_root=paths["wheels_root"])
+        if identity != expected:
+            raise RealAdmissionError("mounted supplement differs from coordinator authority")
+
+
+def _dependency_wheel_sources(sandbox, paths):
+    """Retain separate original and supplemental wheel authorities."""
+    original = _tree(sandbox["wheels"])
+    if (_support_identity(paths) != paths["public_support_identity"]
+            or tree_sha256(original) != paths["public_support_identity"]["wheels_tree_sha256"]):
+        raise RealAdmissionError("dependency support changed before installation")
+    wheel_paths = {name: sandbox["wheels"] / name for name in original}
+    hashes = dict(original)
+    requirements = []
+    if paths.get("supplement_root") is not None:
+        from .runtime_supplement import _manifest, validate_supplement
+        expected = paths["supplement_identity"]
+        mounted = sandbox["root"] / "dependency_supplement"
+        for root in (paths["supplement_root"], mounted):
+            if validate_supplement(root, expected["manifest_sha256"], original_wheels_root=paths["wheels_root"]) != expected:
+                raise RealAdmissionError("dependency supplement differs from coordinator authority")
+        value = _manifest(mounted, expected["manifest_sha256"])
+        for name in _tree(mounted / "wheels"):
+            if name in wheel_paths:
+                raise RealAdmissionError("supplement cannot substitute an original wheel")
+            wheel_paths[name] = mounted / "wheels" / name
+        hashes.update({row["filename"]: row["sha256"] for row in value["wheels"]})
+        requirements = value["install_requirements"]
+    return wheel_paths, requirements, hashes
+
+
+def _provision_dependencies(manager, identifier, paths, task):
+    """Resolve admitted wheels and workspace metadata offline in a fresh venv."""
+    from email.parser import BytesParser
+    from packaging.requirements import Requirement, InvalidRequirement
+    from packaging.tags import sys_tags
+    from packaging.utils import parse_wheel_filename
+    import tomllib
+
+    sandbox = _sandbox_paths(manager, identifier, paths)
+    authority = paths["public_support_identity"]
+    wheel_paths, supplement_requirements, hashes = _dependency_wheel_sources(sandbox, paths)
+    compatible = set(sys_tags())
+    projects, available = set(), set()
+    # Retain native base injection exclusions. pytest-timeout is supplied by
+    # the native image, so include its wheel when present in a subprocess base.
+    skipped = {"pip", "pytest-asyncio", "pytest-httpbin", "pytest-xdist"}
+
+    def requirement(value):
+        try:
+            parsed = Requirement(value)
+        except (InvalidRequirement, TypeError):
+            raise RealAdmissionError("unsupported public dependency requirement") from None
+        if parsed.url is not None:
+            raise RealAdmissionError("public dependency direct URLs are not admitted")
+        return str(parsed)
+
+    for name in sorted(hashes):
+        try:
+            project, _, _, tags = parse_wheel_filename(name)
+            with zipfile.ZipFile(wheel_paths[name]) as archive:
+                metadata = [entry for entry in archive.namelist()
+                            if entry.endswith(".dist-info/METADATA") and len(PurePosixPath(entry).parts) == 2]
+                if len(metadata) != 1:
+                    raise RealAdmissionError("public wheel metadata is ambiguous")
+                for value in BytesParser().parsebytes(archive.read(metadata[0])).get_all("Requires-Dist", []):
+                    requirement(value)
+        except RealAdmissionError:
+            raise
+        except (ValueError, zipfile.BadZipFile, KeyError):
+            raise RealAdmissionError("invalid public wheel or metadata") from None
+        if project in skipped:
+            continue
+        projects.add(project)
+        if tags & compatible:
+            available.add(project)
+            if wheel_paths[name].stat().st_size >= 20 * 1024 * 1024:
+                raise RealAdmissionError("large-wheel provisioning requires separate admission")
+    if projects != available or "pytest" not in projects:
+        raise RealAdmissionError("public wheelhouse lacks pytest or a compatible dependency")
+    python = shlex.quote(str(sandbox["venv"] / "bin/python"))
+    pip = (f"PIP_CONFIG_FILE=/dev/null {python} -I -m pip --isolated install --no-index --no-cache-dir "
+           f"--find-links={shlex.quote(str(sandbox['wheels']))} --only-binary=:all: --no-build-isolation")
+    if supplement_requirements:
+        pip += f" --find-links={shlex.quote(str(sandbox['root'] / 'dependency_supplement/wheels'))}"
+
+    def checked(command, phase):
+        observed = manager.exec(identifier, command, timeout=manager.timeout_seconds)
+        if observed.exit_code != 0:
+            raise RealAdmissionError(f"offline sandbox dependency {phase} failed (exit {observed.exit_code})")
+        return observed
+
+    probe = ("import pathlib,sys,site,pip; root=pathlib.Path(sys.argv[1]); "
+             "assert pathlib.Path(sys.prefix)==root; "
+             "assert pathlib.Path(pip.__file__).resolve().is_relative_to(root); "
+             "assert all(pathlib.Path(p).resolve().is_relative_to(root) for p in site.getsitepackages()); "
+             "print(pip.__version__)")
+    pip_version = checked(f"{python} -I -c {shlex.quote(probe)} {shlex.quote(str(sandbox['venv']))}", "venv probe").stdout.strip()
+    workspace = sandbox["workspace"]
+    editable = any((workspace / name).exists() for name in ("pyproject.toml", "setup.py", "setup.cfg"))
+    reports = []
+    workspace_requirements = []
+    if editable:
+        # Build backends must themselves come from the admitted wheelhouse.
+        # Native uses --no-build-isolation too; never let pip fetch a backend.
+        pyproject = workspace / "pyproject.toml"
+        config = tomllib.loads(_read(pyproject).decode()) if pyproject.exists() else {}
+        build = config.get("build-system", {}).get("requires", ["setuptools>=40.8.0", "wheel"])
+        project = config.get("project", {})
+        for value in project.get("dependencies", []):
+            requirement(value)
+        for values in project.get("optional-dependencies", {}).values():
+            for value in values:
+                requirement(value)
+        backend_report = sandbox["tmp"] / "_dependency_backend_report.json"
+        if build:
+            checked(pip + f" --report={shlex.quote(str(backend_report))} "
+                    + " ".join(shlex.quote(requirement(value)) for value in build), "build backend installation")
+            reports.append(backend_report)
+        # Generate editable metadata without resolving dependencies first.
+        # setup.cfg/setup.py/Poetry can supply dynamic direct URLs too.
+        editable_report = sandbox["tmp"] / "_dependency_editable_report.json"
+        checked(pip + f" --no-deps --report={shlex.quote(str(editable_report))} "
+                + f"-e {shlex.quote(str(workspace))}", "editable metadata installation")
+        entries = json.loads(_read(editable_report).decode())["install"]
+        if len(entries) != 1 or not entries[0].get("download_info", {}).get("dir_info", {}).get("editable"):
+            raise RealAdmissionError("editable workspace metadata is ambiguous")
+        metadata = entries[0]["metadata"]
+        workspace_requirements = [requirement(value) for value in metadata.get("requires_dist", [])]
+        # Keep the installed workspace distribution rather than replacing it
+        # with a cached release while resolving its declared dependencies.
+        workspace_requirements.append(requirement(metadata["name"] + "==" + metadata["version"]))
+        reports.append(editable_report)
+    report = sandbox["tmp"] / "_dependency_report.json"
+    # Resolve native base names with the generated workspace constraints.
+    # Pinning the maximum filename before resolving breaks FastAPI/Starlette.
+    checked(pip + f" --report={shlex.quote(str(report))} " + " ".join(shlex.quote(name) for name in sorted(projects))
+            + " " + " ".join(shlex.quote(value) for value in (*workspace_requirements, *supplement_requirements)),
+            "resolution and installation")
+    reports.append(report)
+    selected = {}
+    for report_path in reports:
+        data = json.loads(_read(report_path).decode())
+        for entry in data["install"]:
+            metadata, source = entry["metadata"], entry["download_info"]
+            url = urllib.parse.urlparse(source["url"])
+            path = Path(urllib.parse.unquote(url.path))
+            if url.scheme != "file" or url.netloc:
+                raise RealAdmissionError("dependency resolver used an unauthorized source")
+            if entry.get("is_direct") and source.get("dir_info", {}).get("editable") and path == workspace:
+                continue
+            if path != wheel_paths.get(path.name):
+                raise RealAdmissionError("dependency resolver left the admitted wheelhouse")
+            if source.get("archive_info", {}).get("hashes", {}).get("sha256") != hashes[path.name]:
+                raise RealAdmissionError("dependency resolver wheel hash differs from authority")
+            selected[re.sub(r"[-_.]+", "-", metadata["name"]).lower()] = (path.name, metadata["version"])
+    # Native never runs pip check. Retain it only as a diagnostic: an unused
+    # installed-package conflict must not redefine native test acceptance.
+    consistency = manager.exec(identifier, f"PIP_CONFIG_FILE=/dev/null {python} -I -m pip --isolated check",
+                               timeout=manager.timeout_seconds)
+    probe = ("import pathlib,sys,pytest; "
+             "assert pathlib.Path(sys.prefix)==pathlib.Path(sys.argv[1]); "
+             "assert pathlib.Path(pytest.__file__).resolve().is_relative_to(pathlib.Path(sys.prefix))")
+    checked(f"{python} -I -c {shlex.quote(probe)} {shlex.quote(str(sandbox['venv']))}", "pytest probe")
+    if "pytest-timeout==2.1.0" in supplement_requirements:
+        probe = ("import importlib.metadata as m,pathlib,sys,pytest_timeout; "
+                 "assert m.version('pytest-timeout')=='2.1.0'; "
+                 "assert pathlib.Path(pytest_timeout.__file__).resolve().is_relative_to(pathlib.Path(sys.prefix))")
+        checked(f"{python} -I -c {shlex.quote(probe)}", "native pytest-timeout probe")
+    setup_bytes = _read(paths["setup_root"] / "setup.py")
+    setup = sandbox["tmp"] / "_swegemma_public_setup.py"
+    with anchor_directory(setup.parent) as fd:
+        out = os.open(setup.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+        with os.fdopen(out, "wb") as stream:
+            stream.write(setup_bytes)
+    if _sha(_read(setup)) != authority["setup_py_sha256"]:
+        raise RealAdmissionError("sandbox setup differs from public authority")
+    _refresh_fast_path(manager, identifier, paths, task)
+    if (_dependency_wheel_sources(sandbox, paths) != (wheel_paths, supplement_requirements, hashes)
+            or any(_sha(_read(path, maximum=256 * 1024 * 1024)) != hashes[name] for name, path in wheel_paths.items())):
+        raise RealAdmissionError("dependency support changed during installation")
+    names = sorted(name for name, _ in selected.values())
+    return {"selected_wheels": names, "wheel_sha256": {name: hashes[name] for name in names},
+            "wheel_sources": {name: "original" if wheel_paths[name].parent == sandbox["wheels"] else "supplement"
+                              for name in names}, "supplement_identity": paths.get("supplement_identity"),
+            "selected_versions": {name: version for name, (_, version) in sorted(selected.items())},
+            "pip_version": pip_version, "system_site_packages": False, "offline": True,
+            "pip_check_exit_code": consistency.exit_code, "pip_check_passed": consistency.exit_code == 0,
+            "pip_check_diagnostic_only": True}
+
+
+def _refresh_fast_path(manager, identifier, paths, task):
+    # Invoke only the official function with local paths. main() contains a
+    # Docker /wheels literal and an online-capable editable fallback.
+    sandbox = _sandbox_paths(manager, identifier, paths)
+    setup = sandbox["tmp"] / "_swegemma_public_setup.py"
+    if _sha(_read(setup)) != paths["public_support_identity"]["setup_py_sha256"]:
+        raise RealAdmissionError("sandbox setup changed before fast-path refresh")
+    script = ("import runpy,sys,sysconfig; from pathlib import Path; "
+              "runpy.run_path(sys.argv[1])['execute_fast_path'](workspace=Path(sys.argv[2]),"
+              "repo=sys.argv[3],site_packages_dir=Path(sysconfig.get_path('purelib')))")
+    command = (f"{shlex.quote(str(sandbox['venv'] / 'bin/python'))} -I -c {shlex.quote(script)} "
+               f"{shlex.quote(str(setup))} {shlex.quote(str(sandbox['workspace']))} {shlex.quote(task.repo)}")
+    observed = manager.exec(identifier, command, timeout=manager.timeout_seconds)
+    if observed.exit_code != 0:
+        raise RealAdmissionError("sandbox fast-path refresh failed")
+
+
 def inspect_official_snapshot(path: Path, asset) -> dict:
     """Inventory faithful official Git metadata; contract bytes remain authority.
 
@@ -402,6 +650,22 @@ def _admit(request: dict, *, verifier: bool = False):
     validate_candidate(paths["submission_root"] / "submission.zip")
     if paths["wheels_root"] != paths["public_root"] / "wheels" or paths["setup_root"] != paths["public_root"] / "sandbox":
         raise RealAdmissionError("real support files must retain official staged public layout")
+    authority = request["provenance"]["public_identities"].get("public_support")
+    if authority != _support_identity(paths):
+        raise RealAdmissionError("staged public support differs from coordinator authority")
+    paths["public_support_identity"] = authority
+    supplement = request["provenance"]["public_identities"].get("dependency_supplement")
+    if runtime.get("supplement_root") is not None:
+        from .runtime_supplement import validate_supplement
+        paths["supplement_root"] = Path(runtime["supplement_root"])
+        if paths["supplement_root"] != paths["public_root"] / "dependency_supplement" or type(supplement) is not dict:
+            raise RealAdmissionError("supplement must retain its separate phase-local public layout")
+        if validate_supplement(paths["supplement_root"], supplement.get("manifest_sha256"),
+                               original_wheels_root=paths["wheels_root"]) != supplement:
+            raise RealAdmissionError("staged supplement differs from coordinator authority")
+        paths["supplement_identity"] = supplement
+    elif supplement is not None:
+        raise RealAdmissionError("supplement authority lacks its phase-local bytes")
     if verifier:
         from .verifier_task import VerifierTask
         task = VerifierTask.from_dict(request["task"])
@@ -510,29 +774,73 @@ def _config(paths, models, submission, budget, *, manifest=None, compaction=None
 
 
 def observe_manager(manager, paths, task, *, observing: bool = True) -> dict:
-    """Passively observe native calls; no scripted behavior/command allowlist."""
+    """Observe native calls and provision the admitted subprocess task venv."""
     original_start, original_exec, original_copy, original_stop = manager.start, manager.exec, manager.copy_to, manager.stop
     result = {"commands": [], "copies": [], "sandbox_ids": [], "stopped_ids": [], "workspace_patch": None,
-              "workspace": None, "junit_xml": None, "sandbox_started_perf": None, "protected_file_reset_commands": []}
+              "workspace": None, "junit_xml": None, "sandbox_started_perf": None, "protected_file_reset_commands": [],
+              "dependency_setup": {}, "setup_error": None, "pytest_invocations": []}
     snapshot = paths["public_root"] / task.snapshot.source_relative_path
+    provisioned = set()
+    setup_active = False
+    setup_commands = []
+    if "public_support_identity" in paths:
+        from swegemma.harness.container_setup import setup_workspace_test_config
+        recorder = SimpleNamespace(exec=lambda identifier, command: (
+            setup_commands.append(command) or SimpleNamespace(exit_code=0)))
+        setup_workspace_test_config(recorder, "", repo=task.repo)
+        setup_workspace_test_config(recorder, "", repo=task.repo, overwrite=True)
 
     def start():
         result["sandbox_started_perf"] = time.perf_counter()
         identifier = original_start()
         result["sandbox_ids"].append(identifier)
+        if "public_support_identity" in paths:
+            try:
+                _mount_public_wheels(manager, identifier, paths, paths["public_support_identity"])
+            except Exception as exc:
+                result["setup_error"] = {"phase": "wheel mounting", "exception_type": type(exc).__name__}
+                raise
         return identifier
 
     def execute(identifier, command, timeout=None):
+        nonlocal setup_active
+        is_setup = command in setup_commands
+        if is_setup:
+            setup_active = True
+            try:
+                if identifier not in provisioned:
+                    # Both phases reach this before baseline/agent clock.
+                    result["dependency_setup"][identifier] = _provision_dependencies(manager, identifier, paths, task)
+                    provisioned.add(identifier)
+                else:
+                    _refresh_fast_path(manager, identifier, paths, task)
+            except Exception as exc:
+                result["setup_error"] = {"phase": "dependency provisioning", "exception_type": type(exc).__name__}
+                raise
+            finally:
+                setup_active = False
         began = time.perf_counter()
         observed = original_exec(identifier, command, timeout=timeout)
+        match = re.fullmatch(r'cd /workspace && PYTHONSAFEPATH=1 PYTHONNOUSERSITE=1 python3 -s -m pytest (.+) '
+                             r'--junitxml=(/tmp/_swegemma_junit_[0-9a-f]{12}\.xml) '
+                             r'-p no:anyio -o timeout=0 -o python_classes="Test\* \*Test" -q', command)
+        if match:
+            # Native verify_task reads JUnit only on exit 0. Observe the same
+            # report after exit 1 too, without altering its command or result.
+            report = original_exec(identifier, f"cat {shlex.quote(match[2])}", timeout=timeout)
+            xml = report.stdout if report.exit_code == 0 else None
+            result["junit_xml"] = xml
+            result["pytest_invocations"].append({"targets": match[1], "exit_code": observed.exit_code, "junit_xml": xml,
+                "failure_diagnostics": test_failure_diagnostics(xml, manager.sandboxes[identifier]["workspace"])})
         if observing:
             result["commands"].append({"command": command, "exit_code": observed.exit_code,
                                        "stdout_size_bytes": len(observed.stdout.encode()), "stderr_size_bytes": len(observed.stderr.encode()),
                                        "stdout_sha256": _sha(observed.stdout.encode()), "stderr_sha256": _sha(observed.stderr.encode()),
                                        "elapsed_seconds": time.perf_counter() - began,
-                                       "network_attempt": bool(re.search(r"\b(?:pip(?:3)?\s+install|curl|wget|git\s+clone)\b", command)),
+                                       "network_attempt": bool(re.search(r"\b(?:pip(?:3)?\s+install|curl|wget|git\s+clone)\b", command))
+                                       and not (setup_active and "--no-index" in command),
                                        "patch_application": "Usage: apply_patch.py <workspace_dir> <patch_path>" in command,
-                                       "purpose": "native"})
+                                       "purpose": "dependency_setup" if setup_active or is_setup else "native_test" if match else "native"})
             if command.startswith("cat /tmp/_swegemma_junit_"):
                 result["junit_xml"] = observed.stdout
             if "git checkout HEAD --" in command or "git clean -f --" in command:
@@ -677,6 +985,11 @@ def solver_execute_real(request: dict) -> dict:
         logger.removeHandler(logs)
         logger.setLevel(old_level)
         manager.cleanup_all()
+    if observations["setup_error"] is not None:
+        # run_agent_sandbox catches setup exceptions and returns an empty patch.
+        # Surface the independent observation as a worker error, not agent work.
+        escaped = "eval.runtime_real.RealAdmissionError: sandbox dependency setup failed"
+        error = "ENVIRONMENT_VERIFICATION_ARTIFACT: sandbox dependency setup failed"
     forbidden = ("eval.verifier_task", "eval.verifier_data", "swegemma.evaluate", "swegemma.harness.verification",
                  "swegemma.harness.sample_verification")
     if any(name in sys.modules for name in forbidden):
@@ -745,6 +1058,227 @@ def verification_observations(native_data: dict, observations: dict, patch: str)
             "test_exit_code": native_data.get("test_exit_code")}
 
 
+def test_failure_diagnostics(xml, workspace):
+    """Classify JUnit errors while their real sandbox source files still exist.
+
+    A missing symbol in repository code is different from an absent external
+    dependency. Only anchored repository paths establish the former; unknown
+    provenance remains inconclusive. No traceback or private text is returned.
+    """
+    import xml.etree.ElementTree as ET
+
+    result = {"repository_errors": 0, "external_dependency_errors": 0, "unclassified_errors": 0,
+              "external_dependency_failures": 0}
+    try:
+        root = ET.fromstring(xml or "")
+        errors = list(root.iter("error"))
+    except (ET.ParseError, TypeError):
+        return result
+    workspace = Path(workspace)
+
+    def repository_path(value):
+        path = Path(value)
+        if path.is_absolute():
+            if path.parts[:2] == ("/", "workspace"):
+                path = workspace.joinpath(*path.parts[2:])
+        else:
+            path = workspace / path
+        try:
+            relative = path.relative_to(workspace)
+            if (".." in relative.parts or path.resolve(strict=True) != path
+                    or relative.name == "conftest.py" or relative.name.startswith("test_")
+                    or any(part in ("tests", "test", "testing") for part in relative.parts[:-1])):
+                return False
+            with anchor_directory(workspace) as descriptor:
+                read_regular(descriptor, relative.as_posix(), max_bytes=16 * 1024 * 1024,
+                             include=False, reject_hardlinks=True)
+            return True
+        except (OSError, ValueError, ContractError):
+            return False
+
+    def repository_module(value):
+        if not re.fullmatch(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", value):
+            return False
+        top = value.split(".", 1)[0]
+        if top in ("tests", "test", "testing", "conftest") or top.startswith("test_"):
+            return False
+        try:
+            # Match the public fast path's immediate import roots, with no
+            # hidden/test roots, symlink aliases or recursive traversal.
+            with anchor_directory(workspace) as descriptor:
+                roots = [workspace] + [workspace / name for name in sorted(os.listdir(descriptor))
+                    if not name.startswith(".") and name not in ("tests", "test", "testing")
+                    and stat.S_ISDIR(os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_mode)]
+            for base in roots:
+                package = base / top
+                if repository_path(base / (top + ".py")) or repository_path(package / "__init__.py"):
+                    return True
+                with anchor_directory(base) as descriptor:
+                    try:
+                        directory = os.open(top, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+                    except OSError:
+                        continue
+                    try:
+                        # A real namespace directory needs no __init__.py.
+                        # An existing unsafe initializer must not bypass the
+                        # regular-file checks above via namespace inference.
+                        try:
+                            os.stat("__init__.py", dir_fd=directory, follow_symlinks=False)
+                        except FileNotFoundError:
+                            try:
+                                os.stat(top + ".py", dir_fd=descriptor, follow_symlinks=False)
+                            except FileNotFoundError:
+                                return True
+                    finally:
+                        os.close(directory)
+        except (OSError, ValueError, ContractError):
+            pass
+        return False
+
+    def classify(element):
+        text = "\n".join(element.itertext())
+        missing = re.findall(r"ModuleNotFoundError:\s*No module named ['\"]([^'\"]+)['\"]", text)
+        symbols = re.findall(r"ImportError:\s*cannot import name ['\"][^'\"]+['\"] from ['\"]([^'\"]+)['\"] \(([^\n]+)\)", text)
+        if missing:
+            if all("." in name and repository_module(name) for name in missing):
+                key = "repository_errors"
+            elif any(repository_module(name) for name in missing):
+                # An existing top-level module that cannot be found can also
+                # indicate failed workspace path setup; do not count that as
+                # a scientifically established code failure.
+                key = "unclassified_errors"
+            else:
+                key = "external_dependency_errors"
+        elif symbols:
+            if all(repository_path(path) or (path == "unknown location" and repository_module(module))
+                   for module, path in symbols):
+                key = "repository_errors"
+            elif any("site-packages" in Path(path).parts for _, path in symbols):
+                key = "external_dependency_errors"
+            else:
+                key = "unclassified_errors"
+        else:
+            # An installed helper can be the final frame of a repository
+            # failure. Only explicit import evidence above establishes a
+            # missing external dependency; test/plugin frames alone do not
+            # prove repository ownership.
+            frames = re.findall(r'''(?:File ["']([^"']+\.py)["'], line \d+|^([^\n]+\.py):\d+:)''', text, re.MULTILINE)
+            if any(repository_path(left or right) for left, right in frames):
+                key = "repository_errors"
+            else:
+                key = "unclassified_errors"
+        return key
+
+    for error in errors:
+        result[classify(error)] += 1
+    # Lazy imports run inside test bodies too. Their missing external packages
+    # must not become apparently nonvacuous failing assertion controls.
+    result["external_dependency_failures"] = sum(
+        classify(failure) == "external_dependency_errors" for failure in root.iter("failure"))
+    return result
+
+
+def test_execution_observation(observations, native_data, test_patch):
+    """Distinguish executed bodies, repository failures and infrastructure.
+
+    The pinned validator still decides success. A confirmed repository import
+    or collection failure preserves its legitimate unresolved result without
+    claiming that test bodies ran. Missing dependencies stay infrastructure.
+    """
+    receipt = {"status": "infrastructure_error", "reason": "expected_test_invocation_missing",
+               "command_exit_code": None, "junit_test_count": None,
+               "required_test_count": None, "required_tests_executed": False}
+    if observations.get("setup_error") is not None:
+        receipt["reason"] = "sandbox_dependency_setup_failed"
+        return receipt
+    invocations = observations.get("pytest_invocations", [])
+    if len(invocations) != 1:
+        return receipt
+    import xml.etree.ElementTree as ET
+    from swegemma.models.task import extract_test_files_from_patch
+    from swegemma.harness.verification import _extract_test_functions_from_patch, _node_matches_requirement
+
+    files = extract_test_files_from_patch(test_patch)
+    targets = [p for p in files if Path(p).name != "conftest.py" and p.endswith(".py")] or files
+    expected = " ".join(shlex.quote(p) for p in targets) if targets else "."
+    required = _extract_test_functions_from_patch(test_patch)
+    receipt["required_test_count"] = len(required)
+    if invocations[0]["targets"] != expected:
+        return receipt
+    invocation = invocations[0]
+    code = invocation["exit_code"]
+    receipt["command_exit_code"] = code
+    if type(code) is not int or code not in (0, 1, 2) or native_data.get("test_exit_code") != code:
+        receipt["reason"] = "pytest_infrastructure_exit"
+        return receipt
+    try:
+        root = ET.fromstring(invocation["junit_xml"] or "")
+        suites = [root] if root.tag == "testsuite" else list(root.findall(".//testsuite"))
+        cases = list(root.iter("testcase"))
+        tests = sum(int(s.get("tests", "0")) for s in suites)
+        errors = sum(int(s.get("errors", "0")) for s in suites)
+        failures = sum(int(s.get("failures", "0")) for s in suites)
+        skipped_count = sum(int(s.get("skipped", "0")) for s in suites)
+        if (not suites or tests <= 0 or tests != len(cases)
+                or errors != sum(tc.find("error") is not None for tc in cases)
+                or failures != sum(tc.find("failure") is not None for tc in cases)
+                or skipped_count != sum(tc.find("skipped") is not None for tc in cases)):
+            raise ValueError
+    except (ET.ParseError, ValueError, TypeError):
+        receipt["reason"] = "junit_missing_or_invalid"
+        return receipt
+    receipt["junit_test_count"] = tests
+    diagnostics = invocation.get("failure_diagnostics")
+    fields = {"repository_errors", "external_dependency_errors", "unclassified_errors", "external_dependency_failures"}
+    valid_diagnostics = (type(diagnostics) is dict and set(diagnostics) == fields
+                         and all(type(value) is int and value >= 0 for value in diagnostics.values())
+                         and sum(diagnostics[name] for name in fields if name != "external_dependency_failures") == errors
+                         and diagnostics["external_dependency_failures"] <= failures)
+    if (errors or failures) and not valid_diagnostics:
+        receipt["reason"] = "test_failure_provenance_missing_or_invalid"
+        return receipt
+    if valid_diagnostics and diagnostics["external_dependency_failures"]:
+        receipt["reason"] = "missing_external_test_dependency"
+        return receipt
+    if errors:
+        if (code in (1, 2) and native_data.get("resolved") is False
+                and valid_diagnostics):
+            if diagnostics["repository_errors"] == errors:
+                return {**receipt, "status": "repository_failure",
+                        "reason": "repository_collection_or_setup_failure"}
+            if diagnostics["external_dependency_errors"]:
+                receipt["reason"] = "missing_external_test_dependency"
+                return receipt
+        receipt["reason"] = "test_collection_or_setup_error"
+        return receipt
+    if code == 2:
+        receipt["reason"] = "pytest_infrastructure_exit"
+        return receipt
+    if (code == 0 and (failures or any(tc.find("failure") is not None for tc in cases))
+            or code == 1 and not (failures and any(tc.find("failure") is not None for tc in cases))):
+        receipt["reason"] = "pytest_result_inconsistent"
+        return receipt
+    executed, skipped = set(), set()
+    for tc in cases:
+        name, classname = tc.get("name", ""), tc.get("classname", "")
+        candidates = {name, name.split("[", 1)[0]}
+        if classname:
+            candidates.update((f"{classname}::{name}", f"{classname}.{name}",
+                               f"{classname.replace('.', '/')}.py::{name}"))
+        (skipped if tc.find("skipped") is not None else executed).update(candidates)
+    if not executed:
+        receipt["reason"] = "no_tests_executed"
+        return receipt
+    for req in required:
+        short = req.split("::")[-1]
+        base = short.split("[", 1)[0]
+        if (not any(_node_matches_requirement(node, req, short, base) for node in executed)
+                or any(_node_matches_requirement(node, req, short, base) for node in skipped)):
+            receipt["reason"] = "required_tests_not_executed"
+            return receipt
+    return {**receipt, "status": "executed", "reason": None, "required_tests_executed": True}
+
+
 def verifier_execute_real(request: dict) -> dict:
     paths, task, pin, snapshot_info = _admit(request, verifier=True)
     private, patch = request["test_patch"], request["returned_patch"]
@@ -782,6 +1316,8 @@ def verifier_execute_real(request: dict) -> dict:
     from .runtime_provenance import sanitize_evidence
     native_data = sanitize_evidence(native.model_dump(mode="json"))
     verification = verification_observations(native_data, observations, patch)
+    execution = test_execution_observation(observations, native_data, private)
+    verification["test_execution"] = execution
     native_ref = _artifact(paths["evidence_root"] / "native_verification.json", canonical_json(native_data).encode())
     observation_ref = _artifact(paths["evidence_root"] / "native_observations.json", canonical_json({
         **observations, **verification, "snapshot": snapshot_info, "verification_config": configuration,
@@ -789,10 +1325,16 @@ def verifier_execute_real(request: dict) -> dict:
         "synthetic_control_fast_path_explicit": True, "model_identity": endpoint_identity}).encode())
     junit = observations["junit_xml"]
     junit_ref = _artifact(paths["evidence_root"] / "junit.xml", junit.encode()) if junit else None
-    return {"schema_version": 1, "task_id": task.instance_id, "runtime_status": "completed", "started_at": started_at,
-            "elapsed_seconds": time.perf_counter() - started, "resolved": native.resolved,
+    applications = verification["apply_pass_diagnostics"]
+    failed_agent_patch = bool(patch.strip() and applications and applications[0]["exit_code"] != 0)
+    infrastructure_error = execution["status"] == "infrastructure_error" and not failed_agent_patch
+    return {"schema_version": 1, "task_id": task.instance_id,
+            "runtime_status": "error" if infrastructure_error else "completed", "started_at": started_at,
+            "elapsed_seconds": time.perf_counter() - started, "resolved": None if infrastructure_error else native.resolved,
             "returned_patch_sha256": _sha(patch.encode()), "test_exit_code": native.test_exit_code,
-            "test_output": native_data.get("test_output"), "error": sanitize_evidence(native.error_message), "native_result": native_data,
+            "test_output": native_data.get("test_output"),
+            "error": f"verification infrastructure error: {execution['reason']}" if infrastructure_error else sanitize_evidence(native.error_message),
+            "native_result": native_data,
             "native_result_ref": native_ref, "workspace_diagnostics_ref": observation_ref, "junit_ref": junit_ref,
             "source_pin": pin, "model_identity_ref": model_ref, "model_server_identity": endpoint_identity,
             "effective_configuration": {"budget": budget, "verification_config": configuration},

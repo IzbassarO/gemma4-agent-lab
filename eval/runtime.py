@@ -36,7 +36,8 @@ _COMMON_CODE = (
 )
 _VERIFIER_CODE = ("eval/verifier_worker.py", "eval/verifier_task.py", "eval/verifier_data.py",
                   "eval/runtime_verifier_fixture.py", "tools/harness_cert/_synthetic_verification.py")
-_REAL_COMMON_CODE = ("eval/real_contracts.py", "eval/runtime_real.py", "eval/runtime_provenance.py")
+_REAL_COMMON_CODE = ("eval/real_contracts.py", "eval/runtime_real.py", "eval/runtime_provenance.py",
+                     "eval/runtime_supplement.py")
 _LINUX_LOCK = REPO_ROOT / "harness_cert/locks/harness_linux_x86_64_py312.lock"
 _LINUX_LOCK_SHA256 = "40c3b8a158eb4ab38289cfd3976759c7d2a5ceea6ddb91924f7121719d904c2d"
 _PREREGISTRATION = REPO_ROOT / "docs/experiments/DEV_E0_FORENSICS_V1_S1_PREREG.md"
@@ -62,6 +63,8 @@ class RuntimeConfig:
     preregistration_sha256: str = "UNKNOWN"
     harness_lock_path: Path | None = None
     worker_parent_root: Path | None = None
+    supplement_root: Path | None = None
+    supplement_manifest_sha256: str | None = None
 
     def __post_init__(self):
         if type(self) is not RuntimeConfig:
@@ -91,6 +94,13 @@ class RuntimeConfig:
             if self.worker_parent_root is not None and (not isinstance(self.worker_parent_root, Path)
                     or not self.worker_parent_root.is_absolute() or ".." in self.worker_parent_root.parts):
                 raise ContractError("worker parent requires an explicit absolute path")
+            if (self.supplement_root is None) != (self.supplement_manifest_sha256 is None):
+                raise ContractError("dependency supplement requires both root and manifest identity")
+            if self.supplement_root is not None:
+                if (not isinstance(self.supplement_root, Path) or not self.supplement_root.is_absolute()
+                        or ".." in self.supplement_root.parts):
+                    raise ContractError("dependency supplement requires an explicit absolute path")
+                hex_digest(self.supplement_manifest_sha256, "supplement_manifest_sha256")
             with anchor_directory(self.candidate_path.parent) as fd:
                 observed = read_regular(fd, self.candidate_path.name, max_bytes=E0_SIZE,
                                         include=False, reject_hardlinks=True)
@@ -101,7 +111,8 @@ class RuntimeConfig:
                 raise ContractError("only fixed synthetic execution is admitted")
             if (self.model_endpoint != "SCRIPTED_ONLY" or self.budget is not None or self.compaction is not None
                     or self.worker_user is not None or self.preregistration_sha256 != "UNKNOWN"
-                    or self.harness_lock_path is not None or self.worker_parent_root is not None):
+                    or self.harness_lock_path is not None or self.worker_parent_root is not None
+                    or self.supplement_root is not None or self.supplement_manifest_sha256 is not None):
                 raise ContractError("synthetic execution cannot receive real-runtime fields")
         if type(self.observation_enabled) is not bool:
             raise ContractError("observation_enabled must be bool")
@@ -263,6 +274,13 @@ def _prepare_worker(config: RuntimeConfig, task: SolverTask, public_root: Path, 
         if real:
             _stage_public_support(public_root, root / "public")
             wheels_root, setup_root = root / "public/wheels", root / "public/sandbox"
+            supplement_root = None
+            if config.supplement_root is not None:
+                from .runtime_supplement import stage_supplement
+                supplement_root = root / "public/dependency_supplement"
+                stage_supplement(config.supplement_root, supplement_root,
+                                 config.supplement_manifest_sha256,
+                                 original_wheels_root=public_root / "wheels")
         else:
             setup = root / "setup/setup.py"
             setup.write_text("# Inert synthetic runtime setup.\n", encoding="utf-8")
@@ -277,7 +295,8 @@ def _prepare_worker(config: RuntimeConfig, task: SolverTask, public_root: Path, 
                    "pytest_support_root": None}
         if real:
             runtime.update(budget=dict(config.budget), compaction=config.compaction,
-                           worker_user=config.worker_user, preregistration_sha256=config.preregistration_sha256)
+                           worker_user=config.worker_user, preregistration_sha256=config.preregistration_sha256,
+                           supplement_root=str(supplement_root) if supplement_root is not None else None)
             from .runtime_linux import own_worker_root
             own_worker_root(root, config.worker_user)
         return root, runtime
@@ -518,13 +537,34 @@ def _admit_real_task(solver_task, verifier_task, public_root, config) -> dict:
     if verifier_task.fail_to_pass is not None or verifier_task.pass_to_pass is not None:
         raise ContractError("real public verifier cannot receive private node lists")
     _refuse_secret_ancestors(public_root)
+    _dependency_supplement_identity(config, public_root)
     verification = real_verification_config(public_root, config.budget)
     if canonical_sha256(verification) != verifier_task.verification_config_sha256:
         raise ContractError("real verification configuration differs from task contract")
     return verification
 
 
-def _real_provenance(solver_task, config, *, confinement) -> dict:
+def _dependency_supplement_identity(config, public_root: Path) -> dict | None:
+    """Admit a separately reviewed public supplement without changing task identity."""
+    root = getattr(config, "supplement_root", None)
+    digest = getattr(config, "supplement_manifest_sha256", None)
+    if (root is None) != (digest is None):
+        raise ContractError("dependency supplement requires both root and manifest identity")
+    if root is None:
+        return None
+    hex_digest(digest, "supplement_manifest_sha256")
+    if not isinstance(root, Path) or not root.is_absolute() or ".." in root.parts:
+        raise ContractError("dependency supplement requires an explicit absolute path")
+    _refuse_secret_ancestors(root)
+    with anchor_directory(root, private=True):
+        pass
+    if _overlap(root, config.artifact_root):
+        raise ContractError("dependency supplement and runtime evidence roots must be separate")
+    from .runtime_supplement import validate_supplement
+    return validate_supplement(root, digest, original_wheels_root=public_root / "wheels")
+
+
+def _real_provenance(solver_task, config, *, confinement, verification, public_root: Path) -> dict:
     from .runtime_provenance import runtime_source_identity, runtime_source_records
     from tools.common import tree_sha256
     source = runtime_source_identity(REPO_ROOT)
@@ -541,6 +581,7 @@ def _real_provenance(solver_task, config, *, confinement) -> dict:
     if lock.sha256 != _LINUX_LOCK_SHA256:
         raise ContractError("Linux harness lock identity differs from admission")
     hex_digest(config.task_manifest_sha256, "task_manifest_sha256")
+    supplement_identity = _dependency_supplement_identity(config, public_root)
     return {"git_head": source["git_head"], "solver_contract_sha256": solver_task.sha256(),
             "task_manifest_sha256": config.task_manifest_sha256,
             "eval_infra_source_identity": source,
@@ -548,6 +589,10 @@ def _real_provenance(solver_task, config, *, confinement) -> dict:
             "preregistration_identity": {"sha256": prereg.sha256, "size_bytes": prereg.size},
             "model_endpoint_identity": config.model_endpoint,
             "public_identities": {"task_manifest_sha256": config.task_manifest_sha256,
+                                  "public_support": {key: verification[key] for key in
+                                                     ("setup_py_sha256", "wheels_tree_sha256")},
+                                  **({"dependency_supplement": supplement_identity}
+                                     if supplement_identity is not None else {}),
                                   **{key: getattr(solver_task, key).to_dict()
                                      for key in ("snapshot", "graph", "embedding")}},
             "harness_lock_sha256": lock.sha256, "confinement": confinement,
@@ -587,6 +632,8 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
         raise ContractError("solver/verifier task identity mismatch")
     real = config.mode == "real_public"
     if real:
+        if config.supplement_root is not None and _overlap(config.supplement_root, private_root):
+            raise ContractError("dependency supplement and private source roots must be separate")
         verification = _admit_real_task(solver_task, verifier_task, public_root, config)
     elif solver_task.repo != "synthetic/probe" or not solver_task.instance_id.startswith("synthetic_"):
         raise ContractError("public DEV execution requires independent audit and operator admission")
@@ -610,7 +657,8 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
     # in the worker's OS profile. Metadata inspection does not read test bytes.
     permitted = (*_interpreter_roots(config.python_executable, nearest),
                  *(Path(p) for p in _OS_READ_ROOTS))
-    for data_root in (public_root, private_root, config.artifact_root):
+    for data_root in (public_root, private_root, config.artifact_root,
+                      *((config.supplement_root,) if config.supplement_root is not None else ())):
         if any(_overlap(data_root, p) for p in permitted):
             raise ContractError("data storage overlaps worker runtime library access")
     config.artifact_root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -628,7 +676,8 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
         confinement = verify_worker_confinement(config, {"public": public_root, "private": private_root,
             "artifacts": config.artifact_root, "repository_git": REPO_ROOT / ".git"})
         seal_json(run_root / "confinement.json", confinement)
-        provenance = _real_provenance(solver_task, config, confinement=confinement)
+        provenance = _real_provenance(solver_task, config, confinement=confinement,
+                                     verification=verification, public_root=public_root)
     else:
         provenance = {"git_head": git_head, "solver_contract_sha256": solver_task.sha256(),
                       "task_manifest_sha256": config.task_manifest_sha256}
@@ -659,6 +708,9 @@ def run_task(solver_task: SolverTask, verifier_task: VerifierTask, *, public_roo
                 _archive_phase(solver_root, run_root / "solver", refs)
         finally:
             shutil.rmtree(solver_root)
+    if (real and solver.runtime_status == "worker_error"
+            and solver.terminal_reason == "ENVIRONMENT_VERIFICATION_ARTIFACT: sandbox dependency setup failed"):
+        raise ContractError(solver.terminal_reason)
     # Private bytes are first read here, after the solver process and root are gone.
     material = load_verifier_material(verifier_task, private_root=private_root,
                                       test_patch_relative_path=test_patch_relative_path)
@@ -730,6 +782,8 @@ def run_verifier_control(solver_task: SolverTask, verifier_task: VerifierTask, *
     if ((solver_task.instance_id, solver_task.repo, solver_task.base_commit, solver_task.snapshot)
             != (verifier_task.instance_id, verifier_task.repo, verifier_task.base_commit, verifier_task.snapshot)):
         raise ContractError("control public/verifier identity mismatch")
+    if config.supplement_root is not None and _overlap(config.supplement_root, private_root):
+        raise ContractError("dependency supplement and private source roots must be separate")
     verification = _admit_real_task(solver_task, verifier_task, public_root, config)
     with anchor_directory(public_root):
         pass
@@ -754,7 +808,8 @@ def run_verifier_control(solver_task: SolverTask, verifier_task: VerifierTask, *
     confinement = verify_worker_confinement(config, {"public": public_root, "private": private_root,
         "artifacts": config.artifact_root, "repository_git": REPO_ROOT / ".git"})
     seal_json(run_root / "confinement.json", confinement)
-    provenance = _real_provenance(solver_task, config, confinement=confinement)
+    provenance = _real_provenance(solver_task, config, confinement=confinement,
+                                 verification=verification, public_root=public_root)
     provenance["staged_source_paths"] = list(_phase_code_paths(verifier=True, real=True))
     material = load_verifier_material(verifier_task, private_root=private_root,
                                       test_patch_relative_path=test_patch_relative_path)
@@ -785,7 +840,7 @@ def run_verifier_control(solver_task: SolverTask, verifier_task: VerifierTask, *
         with anchor_directory(native_path.parent, private=True) as fd:
             raw = read_regular(fd, native_path.name, include=True, reject_hardlinks=True, private=True)
         native = load_json_object(raw.data, "control native observations")
-        observations = {key: native.get(key) for key in ("apply_status", "apply_error", "required_tests_passed", "test_exit_code")}
+        observations = {key: native.get(key) for key in ("apply_status", "apply_error", "required_tests_passed", "test_exit_code", "test_execution")}
     result = {"schema_version": 1, "control": control, "task_id": solver_task.instance_id,
               "verifier_result": verifier.to_dict(), "resolved": verifier.resolved,
               "run_root": str(run_root), "gold_assisted": gold, "solver_started": False,

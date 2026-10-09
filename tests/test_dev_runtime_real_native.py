@@ -239,6 +239,38 @@ def test_support_config_refuses_symlink_or_hardlink(tmp_path):
         real.real_verification_config(public, dict(FROZEN_BUDGET))
 
 
+@pytest.mark.parametrize("verifier", [False, True], ids=["solver", "verifier"])
+@pytest.mark.parametrize("changed", ["sandbox/setup.py", "wheels/local.whl"])
+def test_staging_cannot_rebase_admitted_public_support(tmp_path, monkeypatch, verifier, changed):
+    from eval import runtime, worker_common
+    public = tmp_path.resolve() / "source"
+    (public / "sandbox").mkdir(parents=True)
+    (public / "wheels").mkdir()
+    (public / "sandbox/setup.py").write_text("original public setup")
+    (public / "wheels/local.whl").write_bytes(b"original public wheel")
+    config = real.real_verification_config(public, dict(FROZEN_BUDGET))
+    authority = {key: config[key] for key in ("setup_py_sha256", "wheels_tree_sha256")}
+    (public / changed).write_bytes(b"changed after coordinator admission")
+    worker = tmp_path.resolve() / "worker"
+    staged = worker / "public"
+    staged.mkdir(parents=True)
+    runtime._stage_public_support(public, staged)
+    submission = worker / "submission"
+    submission.mkdir()
+    shutil.copyfile(CANDIDATE, submission / "submission.zip")
+    paths = {"worker_root": worker, "public_root": staged, "wheels_root": staged / "wheels",
+             "setup_root": staged / "sandbox", "submission_root": submission,
+             "evidence_root": worker / "evidence", "harness_root": worker / "harness",
+             "source_wheels_root": worker / "source_wheels"}
+    request = {"mode": "real_public", "runtime": {key: str(value) for key, value in paths.items()},
+               "provenance": {"public_identities": {"public_support": authority}}}
+    # Isolate the support boundary; the closed-request gate has separate tests.
+    monkeypatch.setattr(worker_common, "validate_request", lambda value, **kwargs: value)
+    monkeypatch.setattr(real, "validate_harness_environment", lambda *a, **kw: pytest.fail("optional native admission reached"))
+    with pytest.raises(real.RealAdmissionError, match="coordinator authority"):
+        real._admit(request, verifier=verifier)
+
+
 def model_response(ids=None, **extra):
     return json.dumps({"object": "list", "data": [{"id": name} for name in
                       (ids if ids is not None else [SERVED_MODEL, *ADAPTER_NAMES])], **extra}).encode()

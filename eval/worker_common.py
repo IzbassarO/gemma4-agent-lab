@@ -19,6 +19,7 @@ RUNTIME_FIELDS = ("harness_root", "public_root", "worker_root", "evidence_root",
                   "submission_root", "wheels_root", "setup_root", "sandbox", "image",
                   "model_endpoint", "source_wheels_root", "pytest_support_root")
 REAL_RUNTIME_FIELDS = (*RUNTIME_FIELDS, "budget", "compaction", "worker_user", "preregistration_sha256")
+REAL_RUNTIME_OPTIONAL_FIELDS = ("supplement_root",)
 PROVENANCE_FIELDS = ("git_head", "solver_contract_sha256", "task_manifest_sha256")
 REAL_PROVENANCE_FIELDS = (*PROVENANCE_FIELDS, "eval_infra_source_identity", "candidate_identity",
                           "preregistration_identity", "model_endpoint_identity", "public_identities",
@@ -47,7 +48,8 @@ def validate_request(value: dict, *, verifier: bool = False) -> dict:
         from .real_contracts import validate_real_runtime
         if value["synthetic_case"] is not None:
             raise ContractError("real request must not contain a synthetic case")
-        runtime = closed_dict(value["runtime"], allowed=REAL_RUNTIME_FIELDS, required=REAL_RUNTIME_FIELDS, name="runtime")
+        runtime = closed_dict(value["runtime"], allowed=(*REAL_RUNTIME_FIELDS, *REAL_RUNTIME_OPTIONAL_FIELDS),
+                              required=REAL_RUNTIME_FIELDS, name="runtime")
         validate_real_runtime(runtime)
         if (type(runtime["worker_user"]) is not str
                 or re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", runtime["worker_user"]) is None
@@ -78,6 +80,13 @@ def validate_request(value: dict, *, verifier: bool = False) -> dict:
             raise ContractError("verification support must be phase-local")
         with anchor_directory(path, private=True):
             pass
+    supplement_root = runtime.get("supplement_root")
+    if supplement_root is not None:
+        if (type(supplement_root) is not str
+                or supplement_root != str(root / "public/dependency_supplement")):
+            raise ContractError("dependency supplement must retain its exact phase-local path")
+        with anchor_directory(Path(supplement_root), private=True):
+            pass
     candidate = closed_dict(value["candidate"], allowed=("relative_path", "sha256", "size_bytes"),
                             required=("relative_path", "sha256", "size_bytes"), name="candidate")
     if candidate != {"relative_path": "submission.zip", "sha256": E0_SHA256, "size_bytes": E0_SIZE}:
@@ -100,6 +109,17 @@ def validate_request(value: dict, *, verifier: bool = False) -> dict:
                 or fingerprint["eval_infra_source_identity"]["git_head"] != value["provenance"]["git_head"]):
             raise ContractError("real request provenance disagrees with admitted runtime")
         hex_digest(value["provenance"]["harness_lock_sha256"], "harness_lock_sha256")
+        public_identities = value["provenance"]["public_identities"]
+        if (supplement_root is not None) != ("dependency_supplement" in public_identities):
+            raise ContractError("dependency supplement path and admitted identity disagree")
+        if supplement_root is not None:
+            fields = ("manifest_sha256", "wheels_tree_sha256", "supplement_id")
+            identity = closed_dict(public_identities["dependency_supplement"], allowed=fields,
+                                   required=fields, name="dependency supplement identity")
+            hex_digest(identity["manifest_sha256"], "supplement_manifest_sha256")
+            hex_digest(identity["wheels_tree_sha256"], "supplement_wheels_tree_sha256")
+            if type(identity["supplement_id"]) is not str or not identity["supplement_id"]:
+                raise ContractError("dependency supplement requires a versioned identifier")
         assert_secret_free(value)
         validate_worker_sources(value)
     if not verifier:
