@@ -397,6 +397,7 @@ def _provision_dependencies(manager, identifier, paths, task):
     editable = any((workspace / name).exists() for name in ("pyproject.toml", "setup.py", "setup.cfg"))
     reports = []
     workspace_requirements = []
+    editable_build_requirements = []
     if editable:
         # Build backends must themselves come from the admitted wheelhouse.
         # Native uses --no-build-isolation too; never let pip fetch a backend.
@@ -414,6 +415,38 @@ def _provision_dependencies(manager, identifier, paths, task):
             checked(pip + f" --report={shlex.quote(str(backend_report))} "
                     + " ".join(shlex.quote(requirement(value)) for value in build), "build backend installation")
             reports.append(backend_report)
+        # --no-build-isolation delegates PEP 660 build dependencies to us.
+        # Run the backend hook in the same confined fresh venv as editable pip.
+        build_system = config.get("build-system", {})
+        backend = build_system.get("build-backend", "setuptools.build_meta:__legacy__")
+        backend_path = build_system.get("backend-path")
+        if not isinstance(backend, str) or not backend or (backend_path is not None and
+                (not isinstance(backend_path, list) or any(not isinstance(p, str) for p in backend_path))):
+            raise RealAdmissionError("invalid public build backend metadata")
+        hook_result = sandbox["tmp"] / "_dependency_editable_build_requires.json"
+        hook_script = ("import json,pathlib,sys; "
+                       "from pip._vendor.pyproject_hooks import BuildBackendHookCaller; "
+                       "workspace,backend,backend_path,output=sys.argv[1:]; "
+                       "hooks=BuildBackendHookCaller(workspace,backend,"
+                       "backend_path=json.loads(backend_path),python_executable=sys.executable); "
+                       "requires=hooks.get_requires_for_build_editable({}); "
+                       "pathlib.Path(output).open('x').write(json.dumps(requires))")
+        checked(f"{python} -I -B -c {shlex.quote(hook_script)} "
+                + " ".join(shlex.quote(value) for value in (str(workspace), backend,
+                    json.dumps(backend_path), str(hook_result))), "editable build requirements hook")
+        try:
+            dynamic_build = json.loads(_read(hook_result, maximum=64 * 1024).decode())
+        except (UnicodeError, ValueError):
+            raise RealAdmissionError("invalid editable build requirements metadata") from None
+        if not isinstance(dynamic_build, list) or len(dynamic_build) > 256:
+            raise RealAdmissionError("invalid editable build requirements metadata")
+        editable_build_requirements = [requirement(value) for value in dynamic_build]
+        if editable_build_requirements:
+            dynamic_report = sandbox["tmp"] / "_dependency_editable_build_report.json"
+            checked(pip + f" --report={shlex.quote(str(dynamic_report))} "
+                    + " ".join(shlex.quote(value) for value in editable_build_requirements),
+                    "editable build requirements installation")
+            reports.append(dynamic_report)
         # Generate editable metadata without resolving dependencies first.
         # setup.cfg/setup.py/Poetry can supply dynamic direct URLs too.
         editable_report = sandbox["tmp"] / "_dependency_editable_report.json"
@@ -432,7 +465,7 @@ def _provision_dependencies(manager, identifier, paths, task):
     # Resolve native base names with the generated workspace constraints.
     # Pinning the maximum filename before resolving breaks FastAPI/Starlette.
     checked(pip + f" --report={shlex.quote(str(report))} " + " ".join(shlex.quote(name) for name in sorted(projects))
-            + " " + " ".join(shlex.quote(value) for value in (*workspace_requirements, *supplement_requirements)),
+            + " " + " ".join(shlex.quote(value) for value in (*workspace_requirements, *supplement_requirements, *editable_build_requirements)),
             "resolution and installation")
     reports.append(report)
     selected = {}
@@ -481,6 +514,7 @@ def _provision_dependencies(manager, identifier, paths, task):
             "wheel_sources": {name: "original" if wheel_paths[name].parent == sandbox["wheels"] else "supplement"
                               for name in names}, "supplement_identity": paths.get("supplement_identity"),
             "selected_versions": {name: version for name, (_, version) in sorted(selected.items())},
+            "editable_build_requirements": editable_build_requirements,
             "pip_version": pip_version, "system_site_packages": False, "offline": True,
             "pip_check_exit_code": consistency.exit_code, "pip_check_passed": consistency.exit_code == 0,
             "pip_check_diagnostic_only": True}
